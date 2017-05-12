@@ -143,8 +143,8 @@ end
 --вызывается из этого же файла. Strategy:DoBisness()
 function Strategy:CalcLevels()
   self.CurClose = tonumber(self.PriceSeries[0].close)
-  self.Ma1 = self.Ma1Series[1].close		--предыдущий
-  self.Ma1Pred = self.Ma1Series[0].close 	--предпредыдущий
+  self.Ma1 = self.Ma1Series[1].close						--предыдущая свеча
+  self.Ma1Pred = self.Ma1Series[0].close 	--ENS		--предпредыдущая свеча
 end
 
 --********************************************************************************
@@ -159,8 +159,9 @@ end
 --********************************************************************************
 --********************************************************************************
 function Strategy:DoBisness()
-  
-  self:CalcLevels()
+
+	--получить текущие значения цены и предыдущих свечей
+	self:CalcLevels()
   
 	--работа с режимом взята из аналогичного робота на QPILE
 	local enter_quantity= 0

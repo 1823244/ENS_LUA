@@ -118,7 +118,24 @@ function Strategy:Init()
  
 --ENS 
    --таблица заявок, отправленных на сервер. если заявка есть в таблице, значит она еще не обработана
- --обработка заявки выполняется в OnTransReply
+ --обработка заявки выполняется в OnTransReply(), OnTrade()
+ --элемент таблицы - тоже таблица, с полями
+ --signal_id - ключ. ид сигнала. он уникальный, т.к. каждый робот должен иметь свой идентификатор
+ --trans_id - пользовательский ИД транзакции
+ --qty - число, заполняется из LotToTrade - количество в заявке
+ --order_num - номер заявки, который вернется с сервера и который затем будет указан в сделке. заполняется в OnTransReply
+ --result - пока число, ответ от сервера биржи. заполняется в OnTransReply
+ --запасные поля
+ --direction - строка, buy/sell
+ --filled_qty - число - количество, на которое исполнилась заявка
+ --nil
+ --nil
+ --nil
+ --nil
+ --nil
+ --пример 
+ --self.sentOrders[signal_id]={trans_id = trans_id, qty= LotToTrade, order_num = nil, result = nil, direction = 'sell',nil,nil,nil,nil,nil,nil}  
+ 
  self.sentOrders={}
  
 end
