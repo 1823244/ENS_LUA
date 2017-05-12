@@ -138,6 +138,8 @@ function Strategy:Init()
  
  self.sentOrders={}
  
+ 
+ 
 end
 
 --**********************************************************************
@@ -170,9 +172,15 @@ function Strategy:DoBisness()
  --сигналы будут обрабатываться только если счетчик waiter равен нулю.
  --в противном случае (не равено нулю) это означает, что данный сигнал уже поступал и мы его обработали
  
- 
+	local s_signal_buy=false
+	local s_signal_sell=false
+	local signal_buy_id = nil
+	local signal_sell_id = nil
+  
   --пересечение снизу вверх - покупка
-  if self:signal_buy() == true 
+  s_signal_buy, signal_buy_id = self:signal_buy()
+  
+  if s_signal_buy == true 
 	and self.Position <= 0 
 	and self.Waiter == 0 
 	--ENS Добавил это условие. Если будет режим шорт, с этим условием в лонг не зайдем
@@ -184,13 +192,24 @@ function Strategy:DoBisness()
 	--добавил работу с режимом. было так
     --self:Buy(self.LotToTrade - self.Position)
 	--стало
-	self:Buy(enter_quantity)
-	--message("тест. покупка."..tostring(self.LotToTrade - self.Position).." лотов")
+	
+	--если в таблице отправленных заявок уже есть этот ключ (ид сигнала), то больше не вызываем функцию покупки
+	if self.sentOrders[signal_buy_id] == nil then
+		
+		logs:add(' Отладка. Обработка сигнала на покупку (первый раз. больше такого сообщения быть не должно! если есть - это ошибка в алгоритме): '..signal_buy_id)
+		
+		self:Buy(enter_quantity, signal_buy_id)
+		
+	else
+		--for debug
+		logs:add(' Отладка. Этот сигнал на покупку уже обработан: '..signal_buy_id)
+	end
 	
   end
   
   --пересечение сверху вниз - продажа
-  if self:signal_sell() == true
+  s_signal_sell, signal_sell_id = self:signal_sell()
+  if s_signal_sell == true
 	and self.Position >= 0 
 	and self.Waiter == 0
 	--ENS Добавил это условие. Если будет режим лонг, с этим условием в шорт не зайдем	
@@ -201,7 +220,18 @@ function Strategy:DoBisness()
     --добавил работу с режимом. было так
 	--self:Sell(self.LotToTrade + self.Position)
 	--стало
-	self:Sell(exit_quantity)
+	
+	--если в таблице отправленных заявок уже есть этот ключ (ид сигнала), то больше не вызываем функцию продажи
+	if self.sentOrders[signal_sell_id] == nil then
+		logs:add(' Отладка. Обработка сигнала на продажу (первый раз. больше такого сообщения быть не должно! если есть - это ошибка в алгоритме): '..signal_buy_id)
+		self:Sell(exit_quantity, signal_sell_id)
+		
+	else
+		--for debug
+		logs:add(' Отладка. Этот сигнал на продажу уже обработан: '..signal_sell_id)
+	end
+	
+	
 	--message("тест. продажа."..tostring(self.LotToTrade + self.Position).." лотов")
 	
   end
@@ -236,25 +266,25 @@ function Strategy:CalcLevels()
   
   --for debug
   if self.Ma1 ~= self.Ma1Series[1].close then
-	logs:add('time '..localTime..'. Ma1 has changed. Old = '..tostring(self.Ma1) ..', new = ' .. tostring(self.Ma1Series[1].close))
+	logs:add('Ma1 has changed. Old = '..tostring(self.Ma1) ..', new = ' .. tostring(self.Ma1Series[1].close))
   end
   self.Ma1 = self.Ma1Series[1].close
   
   --for debug
   if self.Ma2 ~= self.Ma2Series[1].close then
-	logs:add('time '..localTime..'. Ma2 has changed. Old = '..tostring(self.Ma2) ..', new = ' .. tostring(self.Ma2Series[1].close))
+	logs:add('Ma2 has changed. Old = '..tostring(self.Ma2) ..', new = ' .. tostring(self.Ma2Series[1].close))
   end
   self.Ma2 = self.Ma2Series[1].close
   
   --for debug
   if self.Ma1Pred ~= self.Ma1Series[0].close then
-	logs:add('time '..localTime..'. Ma1Pred has changed. Old = '..tostring(self.Ma1Pred) ..', new = ' .. tostring(self.Ma1Series[0].close))
+	logs:add('Ma1Pred has changed. Old = '..tostring(self.Ma1Pred) ..', new = ' .. tostring(self.Ma1Series[0].close))
   end  
   self.Ma1Pred = self.Ma1Series[0].close 	--ENS
   
   --for debug
   if self.Ma2Pred ~= self.Ma2Series[0].close then
-	logs:add('time '..localTime..'. Ma2Pred has changed. Old = '..tostring(self.Ma2Pred) ..', new = ' .. tostring(self.Ma2Series[0].close))
+	logs:add('Ma2Pred has changed. Old = '..tostring(self.Ma2Pred) ..', new = ' .. tostring(self.Ma2Series[0].close))
   end  
   self.Ma2Pred = self.Ma2Series[0].close	--ENS
   
@@ -262,6 +292,10 @@ end
 
 --**********************************************************************
 function Strategy:signal_buy()
+
+	--создаем уникальный ИД сигнала. время без секунд
+	local signal_id = tostring(os.date('%Y%m%d')) ..'_' .. tostring(helper:getHRTime5()) ..'_'.. security.class ..'_'..security.code..'_'..tostring(settings.robot_id)
+	
   if self.Ma1 ~= 0 
 	and self.Ma1Pred  ~= 0 
 	and self.Ma2 ~= 0
@@ -271,14 +305,18 @@ function Strategy:signal_buy()
 	and self.Ma1Pred < self.Ma2Pred -- previous. short less than long
 	and self.Ma1 > self.Ma2 --current. short greater than long
   then
-	return true
+	return true, signal_id
   else
-	return false
+	return false, signal_id
   end
 end
 
 --**********************************************************************
 function Strategy:signal_sell()
+
+	--создаем уникальный ИД сигнала. время без секунд
+	local signal_id = tostring(os.date('%Y%m%d')) ..'_' .. tostring(helper:getHRTime5()) ..'_'.. security.class ..'_'..security.code..'_'..tostring(settings.robot_id)
+
   if self.Ma1 ~= 0 
 	and self.Ma1Pred  ~= 0 
 	and self.Ma2 ~= 0
@@ -288,9 +326,9 @@ function Strategy:signal_sell()
 	and self.Ma1Pred > self.Ma2Pred -- previous. short greater than long
 	and self.Ma1 < self.Ma2 --current. short less than long
 	then
-	return true
+	return true, signal_id
   else
-	return false
+	return false, signal_id
   end
 end
 
@@ -354,38 +392,42 @@ function Strategy:KillAll()
 end
 
 --вызывается из этого же файла. Strategy:DoBisness()
-function Strategy:Buy(LotToTrade)
+function Strategy:Buy(LotToTrade, signal_id)
   message("Buy " .. settings.SecCodeBox, 1)
-  logs:add('buy '.. settings.SecCodeBox ..' at ' ..tostring(helper:getHRTime2()))
-  logs:add('values of MA at this moment:')
-  logs:add('Ma1Pred = '..tostring(self.Ma1Pred))
-  logs:add('Ma2Pred = '..tostring(self.Ma2Pred))
-  logs:add('Ma1 = '..tostring(self.Ma1))
-  logs:add('Ma2 = '..tostring(self.Ma2))
-  logs:add('                                      ')
+  
+  logs:add('buy '.. settings.SecCodeBox)
+  
   --transactions:order(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade)
-  --idTrans = transactions:CalcId()
-  --transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade, idTras)
+  
+  local trans_id = transactions:CalcId()
+  
+  --transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade, trans_id)
+  
   --добавим заявку в таблицу необработанных
-  self.sentOrders[idTrans]={idTrans, LotToTrade}
-  logs:add('order sent. trans_id = '..tostring(idTrans)..', qty = '..tostring(LotToTrade))
+  
+  self.sentOrders[signal_id]={trans_id = trans_id, qty= LotToTrade, order_num = nil, result = nil, direction = 'buy',filled_qty=0,nil,nil,nil,nil,nil}  
+  
+  logs:add('order sent. trans_id = '..tostring(trans_id)..', qty = '..tostring(LotToTrade))
+  
  end
 
 --вызывается из этого же файла. Strategy:DoBisness()
-function Strategy:Sell(LotToTrade)
+function Strategy:Sell(LotToTrade, signal_id)
+  
   message("Sell " .. settings.SecCodeBox, 1)
-  logs:add('sell '.. settings.SecCodeBox ..' at ' ..tostring(helper:getHRTime2()))
-  logs:add('values of MA at this moment:')
-  logs:add('Ma1Pred = '..tostring(self.Ma1Pred))
-  logs:add('Ma2Pred = '..tostring(self.Ma2Pred))
-  logs:add('Ma1 = '..tostring(self.Ma1))
-  logs:add('Ma2 = '..tostring(self.Ma2))
-  logs:add('                                      ')  
+  
+  logs:add('sell '.. settings.SecCodeBox)
+  
   --transactions:order(settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade)
-  --idTrans = transactions:CalcId()
-  --transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade, idTrans)
+  
+  local trans_id = transactions:CalcId()
+  
+  --transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade, trans_id)
+  
   --добавим заявку в таблицу необработанных
-  self.sentOrders[idTrans]={idTrans, LotToTrade}
-  logs:add('order sent. trans_id = '..tostring(idTrans)..', qty = '..tostring(LotToTrade))
+  
+  self.sentOrders[signal_id]={trans_id = trans_id, qty= LotToTrade, order_num = nil, result = nil, direction = 'sell',filled_qty=0,nil,nil,nil,nil,nil}  
+  
+  logs:add('order sent. trans_id = '..tostring(trans_id)..', qty = '..tostring(LotToTrade))
   
 end
