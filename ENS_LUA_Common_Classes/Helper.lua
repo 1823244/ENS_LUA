@@ -60,6 +60,23 @@ function Helper:getMiliSeconds()
   local now = os.clock()
   return string.format("%s,%3d", os.date("%X", now), select(2, math.modf(now)) * 1000)
 end
+
+--ENS for trans_id. эта функция создает trans_id на основе текущего времени с миллисекундами
+function Helper:getMiliSeconds_trans_id()
+  local now = os.clock()
+  local ms = select(2, math.modf(now)) * 1000
+  ms = self:round(ms, 0)
+  local ms2 = ''
+  if ms < 10 then
+	ms2 = '00'..tostring(ms)
+  elseif ms < 100 then 
+	ms2 = '0'..tostring(ms)
+  else
+	ms2 = ''..tostring(ms)
+  end
+  return string.format("%s", tostring(self:getHRTime4()) .. ms2)
+end
+
 function Helper:getHRTime2()
   hour = tostring(os.date("*t").hour)
   minute = tostring(os.date("*t").min)
@@ -90,9 +107,10 @@ function Helper:getHRTime3(seconds)
   return hour * 10000 + minute * 100 + sec
 end
 function Helper:getHRTime4()
-  hour = tostring(os.date("*t").hour)
-  minute = tostring(os.date("*t").min)
-  second = tostring(os.date("*t").sec)
+	local dt = os.date("*t")
+  hour = tostring(dt.hour)
+  minute = tostring(dt.min)
+  second = tostring(dt.sec)
   return hour * 10000 + minute * 100 + second
 end
 function Helper:round(num, idp)
@@ -134,4 +152,31 @@ function Helper:get_trade_date_sql(datetime)
   month = z..tostring(datetime.month)
 
   return tostring(datetime.year)..'-'..month..'-'..day
+end
+
+--функция возвращает true, если бит [index] установлен в 1 (взято из примеров some_callbacks.lua)
+--пример вызова для определения направления
+--if bit_set(flags, 2) then
+--		t["sell"]=1
+--	else
+--		t["buy"] = 1
+--	end
+--
+function Helper:bit_set( flags, index )
+  local n=1
+  n=bit.lshift(1, index)
+  if bit.band(flags, n) ~=0 then
+    return true
+  else
+    return false
+  end
+end
+
+--определим направление сделки
+function Helper:what_is_the_direction(trade)
+    if self:bit_set(trade.flags, 2) then
+      return 'sell'
+    else
+      return 'buy'
+    end
 end

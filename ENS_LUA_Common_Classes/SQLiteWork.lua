@@ -12,7 +12,8 @@ function SQLiteWork:Init()
   settings:Init()
   settings:Load()
   
-  self.db = sqlite3.open(settings.dbpath)
+  --self.db = sqlite3.open(settings.dbpath)
+  self.db = nil --сюда передадим коннект к базе данных sqlite из главного файла робота
 end
 
 --выполняет выборку и возвращает рекордсет
@@ -23,7 +24,8 @@ end
 
 --исполняет запрос без возврата рекордсета
 function SQLiteWork:executeSQL(sql)
-	self.db:exec(sql)
+	local ret = self.db:exec(sql)
+	return ret
 end
 --создает таблицу с сигналами от роботов
 function SQLiteWork:createTableSignals()
@@ -114,9 +116,10 @@ function SQLiteWork:createTableOrders()
 			,date                     	TEXT      --            получаем из таблицы datetime, наверное сразу в виде гггг-мм-дд
 			,time                     	TEXT -- получаем из таблицы datetime
 			,robot_id            		TEXT -- наверное, будем заполнять потом, т.к. пока непонятно, как это делать в событии OnTrade() да надо ли это делать там?
-			,withdraw_date 			TEXT --               получаем из таблицы withdraw_datetime
-			,withdraw_time 			TEXT --               получаем из таблицы withdraw_datetime
+			,withdraw_date 				TEXT --               получаем из таблицы withdraw_datetime
+			,withdraw_time 				TEXT --               получаем из таблицы withdraw_datetime
 			,direction            		TEXT --buy/sell
+			,signal_id					TEXT
 			--мои поля конец
 			,flags                                                                    REAL  --Набор битовых флагов
 			,brokerref                                                         TEXT  --Комментарий, обычно: <код клиента>/<номер поручения> 
@@ -164,6 +167,25 @@ function SQLiteWork:createTableOrders()
 			,visible                                                                REAL  --Видимое количество. Параметр айсберг-заявок, для обычных заявок выводится значение: «0»
  
  
+          );  
+        ]=]
+         
+   self:executeSQL(sql)
+end
+
+function SQLiteWork:createTableTransId()
+
+  local sql=[=[
+          CREATE TABLE transId
+          (
+                                
+            rownum INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL
+                                
+			,trans_id                   REAL  --Идентификатор транзакции -- ПОЛЬЗОВАТЕЛЬСКИЙ!!!!! при программном создании , чтобы потом можно было отловить
+			,signal_id					TEXT  --ссылка на таблицу signals
+			,order_num                  REAL  --Номер заявки в торговой системе 
+			,robot_id            		TEXT -- наверное, будем заполнять потом, т.к. пока непонятно, как это делать в событии OnTrade() да надо ли это делать там?
+			
           );  
         ]=]
          

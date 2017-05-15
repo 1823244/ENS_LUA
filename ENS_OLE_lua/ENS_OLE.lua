@@ -43,6 +43,7 @@ sqlitework={}
 logs={}
 
 
+local db = nil 
 
 
 is_run = true	--флаг работы скрипта, пока истина - скрипт работает
@@ -50,6 +51,12 @@ is_run = true	--флаг работы скрипта, пока истина - скрипт работает
 working = false	--флаг активности. чтобы не закрывая окно можно быть включить/выключить робота
 
 Waiter=0		--какой-то флаг, здесь похоже не используется, зато есть в свойствах класса StrategyBollinger
+
+--лимиты и счетчики безопасного количества выполнения колбэков. если уйдем в бесконечный цикл, то по достижении лимита прервем его
+safeIterationsOrdersLimit = 5
+safeIterationsOrdersCount = 0
+safeIterationsTradesLimit = 5
+safeIterationsTradesCount = 0
 
 --local hID=0		--вроде бы не используется, зачем он тут нужен?
  
@@ -89,6 +96,7 @@ function OnInit(path)
 	sqlitework = SQLiteWork()
 	sqlitework:Init()  
   
+  db = sqlite3.open(settings.dbpath)
 end
 
 --это не обработчик события, а просто функция покупки
@@ -136,6 +144,11 @@ function OnStop(s)
 	is_run = false
 	
 end 
+
+function StopScript()
+	window:Close()
+	is_run=false
+end
 
 --Функция вызывается терминалом QUIK при при изменении текущих параметров. 
 --class - строка, код класса
@@ -283,12 +296,20 @@ end
 --событие, возникающее после поступления сделки
 function OnTrade(trade)
 	
+	safeIterationsTradesCount = safeIterationsTradesCount + 1
+	if safeIterationsTradesCount >= safeIterationsTradesLimit then
+		is_run = false
+		working = false
+		message('safely break script (OnTrade)')
+		StopScript()
+	end
 	
 	local robot_id=''	--dummy
 	
-	--нам требуется поле
+	--тут главное - найти ID сигнала, по которому прошла сделка
+	
+	--нам понадобятся поля
 	--trade.trans_id
-	--еще есть поле
 	--trade.order_num
 	
 	--нужно найти в таблице заявок этот trans_id. может быть несколько заявок (может ли?)
@@ -299,18 +320,79 @@ function OnTrade(trade)
 	--иначе - исполняем частично и ждем дальше
 	--под частичным исполнением подразумеваем, что сделка увеличит размер позиции на свое количество
 	
-	tableOrders = strategy:findOrders(trade.trans_id) --это обычная таблица луа, индексация числовая, начинается с нуля
-	local count = 0
-	while count <= table.maxn(tableOrders) do
-        
-        if tableOrders[count]['qty'] == trade.qty then
-			--заявка исполнена полностью
+	--tableOrders = strategy:findOrders(trade.trans_id) --это обычная таблица луа, индексация числовая, начинается с нуля
+	
+	local k = "'"
+	local sql = [[
+	
+		select 
+			signal_id,
+			robot_id
+		from 
+			transId
+		where
+			trans_id	= ]].. tostring(trade.trans_id) .. [[
+			and
+			order_num	= ]] ..tostring(trade.order_num)
+	
+	for row in db:nrows(sql) do
+		--обновить позицию
+		strategy:test_insert_positions(row.signal_id, helper:what_is_the_direction(trade), trade.trans_id)
+	end
+	
+
+		--[[
+		--после окончания добора в поле processed пишем число 1
+		if realPos == LotsToPosition then
+			self:updateSignalStatus(sig_id, 1)
+			if self:checkSignalStatus(sig_id, 1) == 1 then
+				--it is OK
+			else
+				--update failed. что делать???
+				message('fail to update signal status')
+			end
 		else
-			--заявка исполнена частично
+			--доделать обработчик. а вообще, что делать в этой ситуации?
+			message('не удалось открыть позицию требуемого размера')
 		end
-		
-		count=count+1
-    end
+		--]]	
+	
+	
+end
+
+function OnOrder(order)
+
+	safeIterationsOrdersCount = safeIterationsOrdersCount + 1
+	if safeIterationsOrdersCount >= safeIterationsOrdersLimit then
+		is_run = false
+		working = false
+		message('safely break script (OnOrder)')
+		StopScript()
+	end
+
+
+	local k = "'"
+	--ищем заявку с таким же trans_id
+	local sql = [[
+	select
+		rownum
+	from
+		transId
+	where
+		trans_id = ]] .. tostring(order.trans_id)
+	
+	--помещаем в ту строку номер заявки
+	for row in db:nrows(sql) do
+		sql = [[
+		update
+			transId
+		set
+			order_num = ]] ..tostring(order.order_num) .. [[
+		where
+			rownum = ]] ..tostring(row.rownum)
+		db:exec(sql)
+	end
+	
 	
 end
 
@@ -358,6 +440,16 @@ local f_cb = function( t_id,  msg,  par1, par2)
 		end
 	end
 
+	--для отладки
+	if x~=nil then
+		if (msg==QTABLE_LBUTTONDBLCLK) and x["image"]=="TEST" then
+			message("TEST",1)
+			funcTest()
+			--window:SetValueWithColor("Старт","Остановка","Red")
+			--working=true
+		end
+	end
+
 	if x~=nil then
 		if (msg==QTABLE_LBUTTONDBLCLK) and x["image"]=="Остановка" then
 
@@ -391,13 +483,17 @@ end
 function main()
 
 	--создаем таблицу сигналов в базе
+	sqlitework.db = db
 	sqlitework:createTableSignals()
 	--создаем таблицу позиций в базе
 	sqlitework:createTablePositions()
 	
 	sqlitework:createTableOrders()
 	
-	
+	--в этой таблице есть поля: rownum | trans_id | signal_id | order_num | robot_id
+	--в нее пишем сначала из модуля strategy
+	--а затем добавляем order_num из события OnOrder()
+	sqlitework:createTableTransId()
 
 	
 	
@@ -432,9 +528,11 @@ function main()
 	window:AddRow({"Sell по рынку",""},"Red")
 	window:AddRow({"",""},"")
 	window:AddRow({"Старт",""},"Green")
+	window:AddRow({"",""},"")
+	window:AddRow({"TEST",""},"Green")
 
 
-	funcTest()	
+	
 	
 	--QLUA SetTableNotificationCallback
 	--Задание функции обратного вызова для обработки событий в таблице. 
@@ -479,12 +577,23 @@ function funcTest()
 	--sqlitework:executeSQL('delete from positions')
 	--sqlitework:executeSQL('delete from signals')
 	
+	local k="'"
+	local trans_id = helper:getMiliSeconds_trans_id()
+	local sql = 'insert into transid (trans_id,signal_id,order_num,robot_id) values ('..tostring(trans_id)..','..tostring(44)..',0,'..k.. settings.robot_id ..k..')'
+	ret = db:exec(sql)			
+	if ret~=0 then
+		message('error on insert to transid. error code is '..tostring(ret))
+	end
+	--logs:add(sql)	
 	
-		NumCandles = getNumCandles(settings.IdPriceCombo)	
+	NumCandles = getNumCandles(settings.IdPriceCombo)	
  
 	if NumCandles==0 then
+		message('вероятно, слетели идентификаторы цены и средней скользящей!')
 		return 0
 	end
+	
+	strategy.db = db
  
 	strategy.NumCandles=2
 	
@@ -499,11 +608,13 @@ function funcTest()
 	security:Update()		--обновляет цену последней сделки в таблице security (свойство Last,Close)
 	strategy.Position=trader:GetCurrentPosition(settings.SecCodeBox,settings.ClientBox)
 	
+	message('---')
 	
 	--добавить сигнал
 	
 	strategy:CalcLevels()
 	if strategy:findSignal('buy')  == false then
+		message('run saveSignal')
 		strategy:saveSignal('buy')
 	end	
 	--[[
@@ -511,6 +622,8 @@ function funcTest()
 		strategy:saveSignal('sell')
 	end
 	--]]
+		
+
 		
 	strategy:processSignal('buy')
 	

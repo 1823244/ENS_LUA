@@ -1,0 +1,89 @@
+2017-05-16 00:52:38
+2017-05-16 00:52:38 Robot started 
+2017-05-16 00:52:38
+2017-05-16 00:52:38
+2017-05-16 00:52:38 Robot started 
+2017-05-16 00:52:38
+2017-05-16 00:52:40  
+		insert transId (trans_id,signal_id,order_num,robot_id) 
+		values (5240595		,44		,0
+		,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60'		)
+		
+2017-05-16 00:54:40
+2017-05-16 00:54:40 Robot started 
+2017-05-16 00:54:40
+2017-05-16 00:54:40
+2017-05-16 00:54:40 Robot started 
+2017-05-16 00:54:40
+2017-05-16 00:54:41  
+		insert transId (trans_id,signal_id,order_num,robot_id) 
+		values (5441669,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 00:55:05
+2017-05-16 00:55:05 Robot started 
+2017-05-16 00:55:05
+2017-05-16 00:55:05
+2017-05-16 00:55:05 Robot started 
+2017-05-16 00:55:05
+2017-05-16 00:55:06  
+		insert into transId (trans_id,signal_id,order_num,robot_id) 
+		values (5506813,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 00:58:12
+2017-05-16 00:58:12 Robot started 
+2017-05-16 00:58:12
+2017-05-16 00:58:12
+2017-05-16 00:58:12 Robot started 
+2017-05-16 00:58:12
+2017-05-16 00:58:14 insert into transId (trans_id,signal_id,order_num,robot_id) values (5814108,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 00:58:52
+2017-05-16 00:58:52 Robot started 
+2017-05-16 00:58:52
+2017-05-16 00:58:52
+2017-05-16 00:58:52 Robot started 
+2017-05-16 00:58:52
+2017-05-16 00:58:54 insert into transid (trans_id,signal_id,order_num,robot_id) values (5854525,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 00:59:18 insert into transid (trans_id,signal_id,order_num,robot_id) values (5918480,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 01:00:07
+2017-05-16 01:00:07 Robot started 
+2017-05-16 01:00:07
+2017-05-16 01:00:07
+2017-05-16 01:00:07 Robot started 
+2017-05-16 01:00:07
+2017-05-16 01:00:08 signal buy
+
+2017-05-16 01:00:09 insert into transid (trans_id,signal_id,order_num,robot_id) values (10009363,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 01:00:09 signal buy
+
+2017-05-16 01:00:10 signal buy
+
+2017-05-16 01:02:12
+2017-05-16 01:02:12 Robot started 
+2017-05-16 01:02:12
+2017-05-16 01:02:12
+2017-05-16 01:02:12 Robot started 
+2017-05-16 01:02:12
+2017-05-16 01:02:14 insert into transid (trans_id,signal_id,order_num,robot_id) values (10214195,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 01:05:24
+2017-05-16 01:05:24 Robot started 
+2017-05-16 01:05:24
+2017-05-16 01:05:24
+2017-05-16 01:05:24 Robot started 
+2017-05-16 01:05:24
+2017-05-16 01:05:25 insert into transid (trans_id,signal_id,order_num,robot_id) values (10525073,44,0,'ENS_OLE_LUA_GAZP_ARQA_M1_MA60')
+2017-05-16 01:06:57
+2017-05-16 01:06:57 Robot started 
+2017-05-16 01:06:57
+2017-05-16 01:06:57
+2017-05-16 01:06:57 Robot started 
+2017-05-16 01:06:57
+2017-05-16 01:15:52
+2017-05-16 01:15:52 Robot started 
+2017-05-16 01:15:52
+2017-05-16 01:15:52
+2017-05-16 01:15:52 Robot started 
+2017-05-16 01:15:52
+2017-05-16 01:16:17
+2017-05-16 01:16:17 Robot started 
+2017-05-16 01:16:17
+2017-05-16 01:16:17
+2017-05-16 01:16:17 Robot started 
+2017-05-16 01:16:17

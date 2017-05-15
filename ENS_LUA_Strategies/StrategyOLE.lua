@@ -2,7 +2,7 @@ local sqlite3 = require("lsqlite3")
 
 local helper = {}
 local settings = {}
-local sqlitework = {}
+--local sqlitework = {}
 local logs = {}
 
 Strategy = class(function(acc)
@@ -87,8 +87,8 @@ function Strategy:Init()
   settings = Settings()
   settings:Init()  
 	
-  sqlitework = SQLiteWork()
-  sqlitework:Init()  
+  --sqlitework = SQLiteWork()
+  --sqlitework:Init()  
 	
 	--message(settings.dbpath)
 	
@@ -98,6 +98,7 @@ function Strategy:Init()
   helper = Helper()
   helper:Init()  
 
+  self.db = nil --сюда передадим коннект к базе данных sqlite из главного файла робота
 end
 
 function Strategy:SetSeries(priceSeries)
@@ -282,7 +283,7 @@ local sql=' insert into positions ('..
 		','..tostring(trans_id)..
 		');'
           --message(sql)                     
-           sqlitework.db:exec(sql)  
+           self.db:exec(sql)  
 		   
 		  -- logs:add(sql)
 end
@@ -331,19 +332,22 @@ end
 function Strategy:Buy(LotToTrade, trans_id)
   message("Buy " .. settings.SecCodeBox, 1)
   --transactions:order(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade)
-  --transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade, trans_id)
+  transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade, trans_id)
 end
 
 --вызывается из этого же файла. Strategy:DoBisness()
 function Strategy:Sell(LotToTrade, trans_id)
   message("Sell " .. settings.SecCodeBox, 1)
   --transactions:order        (settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade)
-  --transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade, trans_id)
+  transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade, trans_id)
   
 end
 
 --сохраняет сигнал в таблицу сигналов.
 function Strategy:saveSignal(direction)
+
+	message('saveSignal')
+	
 	local k = "'"
 	local sql = [[
 	
@@ -389,7 +393,7 @@ function Strategy:saveSignal(direction)
 	]]
 	
 	
-	sqlitework:executeSQL(sql)
+	self.db:exec(sql)
 
 end
 
@@ -419,7 +423,7 @@ function Strategy:findSignal(direction)
 	
 	local i = 0
 	
-	for row in sqlitework.db:nrows(sql) do
+	for row in self.db:nrows(sql) do
 		i=i+1
 		break
 	end
@@ -466,7 +470,7 @@ function Strategy:findPosition(sec_code, class_code, client_code, depo_code, rob
 		]]
 	
 	
- 	for row in sqlitework.db:nrows(sql) do
+ 	for row in self.db:nrows(sql) do
 		return row		
 	end
 	return nil
@@ -476,12 +480,20 @@ end
 --обработать сигнал
 function Strategy:processSignal(direction)
 
+	message('process signal')
 	--найти в базе необработанные сигналы и по-очереди их обработать
 	--пока ожидаем, что в один момент времени может быть один необработанный сигнал
 	
 	--для тестов на всякий случай выберем один последний сигнал (LIMIT 1)
 	
 	local k = "'"
+	
+
+		
+		
+			
+			
+	
 	local sql = [[
 	
 		select 
@@ -491,11 +503,11 @@ function Strategy:processSignal(direction)
 		where
 
 			client_code=	]]..k.. settings.ClientBox ..k.. 	[[ and
-			depo_code=	]]..k.. settings.DepoBox ..k.. 		[[ and
+			depo_code=		]]..k.. settings.DepoBox ..k.. 		[[ and
 			robot_id=		]]..k.. settings.robot_id ..k.. 		[[ and
 			sec_code=		]]..k.. settings.SecCodeBox ..k..	[[ and
-			class_code=	]]..k.. settings.ClassCode ..k..	[[ and
-			direction = 		]]..k.. direction ..k..	[[ and
+			class_code=		]]..k.. settings.ClassCode ..k..	[[ and
+			direction = 	]]..k.. direction ..k..	[[ and
 			processed=		0
 		order by
 			rownum DESC
@@ -504,15 +516,24 @@ function Strategy:processSignal(direction)
 	
 	local i = 0
 	
-	for row in sqlitework.db:nrows(sql) do
+	local safeCount = 0
+	
+	for row in self.db:nrows(sql) do
+		i=i+1
+		safeCount = safeCount+1
+		if safeCount >= 50 then
+			message('safely break loop in fn processSignal()')
+			break
+		end
+		message('was found a signal: '..tostring(row.rownum))
 		
-		sig_id = row.rownum
+		local sig_id = row.rownum
 		 
 		--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
-		LotsToPosition = settings.LotSizeBox
+		local LotsToPosition = tonumber(settings.LotSizeBox)
 		
 		--посмотреть, сколько уже лотов/контрактов есть в позиции (с отбором по этому роботу)
-		realPos = 0
+		local realPos = 0
 		--это строка рекордсета		
 		AlreadyInPosition = self:findPosition(settings.SecCodeBox, settings.ClassCode, settings.ClientBox, settings.DepoBox, settings.robot_id)
 		if self:checkNill(AlreadyInPosition) then
@@ -526,12 +547,22 @@ function Strategy:processSignal(direction)
 		
 		end
 		
+		local safeCount2 = 0
+		
+		message('real position is: ' .. tostring(realPos))
+		
 		--если эти значение отличаются, то добираем позу
-		while realPos ~= LotsToPosition do
+		if realPos < LotsToPosition then
+			
+			safeCount2 = safeCount2+1
+			if safeCount2 >= 50 then
+				message('safely break loop 2 in fn processSignal()')
+				break
+			end
 			
 			--послать заявку
 			
-			trans_id = 199357 --надо придумать, как генерировать trans_id
+			local trans_id = helper:getMiliSeconds_trans_id()
 			
 			if direction == 'buy' then
 				self:Buy(LotsToPosition - realPos, trans_id)
@@ -539,34 +570,43 @@ function Strategy:processSignal(direction)
 				self:Sell(LotsToPosition - realPos, trans_id)
 			end
 			
+			--запоминаем trans_id в таблице transId
+			
+			sql = [[ 
+			insert into transId (trans_id
+				,signal_id
+				,order_num
+				,robot_id
+				) 
+			values (
+			]]..tostring(trans_id)..[[
+			,]]..tostring(sig_id)..[[
+			,0
+			,]]..k.. settings.robot_id ..k..[[
+			)
+			]]
+			self.db:exec(sql)
+			--logs:add(sql)
+			
 			--в процессе добора нужно обновлять таблицу позиции
 			--это нужно делать из функции OnTrade, отлавливая сделки по TRANSID
 			
 			--для отладки. закинуть строку в табл positions
-			self:test_insert_positions(sig_id, direction, trans_id)
+			--self:test_insert_positions(sig_id, direction, trans_id)
 			
 			--для отладки, чтобы зацикливания не проиходило
-			realPos = LotsToPosition
+			--realPos = LotsToPosition
 			
 		end
 		
-		
-		--после окончания добора в поле processed пишем число 1
-		if realPos == LotsToPosition then
-			self:updateSignalStatus(sig_id, 1)
-			if self:checkSignalStatus(sig_id, 1) == 1 then
-				--it is OK
-			else
-				--update failed. что делать???
-				message('fail to update signal status')
-			end
-		else
-			--доделать обработчик. а вообще, что делать в этой ситуации?
-			message('не удалось открыть позицию требуемого размера')
-		end
+
 		
 		
 		
+	end
+	
+	if i==0 then
+		message('no signals was found!')
 	end
 	
 end
@@ -576,7 +616,7 @@ function Strategy:updateSignalStatus(sig_id, newStatus)
 
 	local sql = 'update signals set processed = '..tostring(newStatus)..' where rownum = ' .. tostring(sig_id)
 	
-	sqlitework:executeSQL(sql)
+	self.db:exec(sql)
 
 end
 
@@ -585,7 +625,7 @@ function Strategy:checkSignalStatus(sig_id)
 
 	local sql = 'select processed from signals  where rownum = ' .. tostring(sig_id)
 	
-	for row in sqlitework.db:nrows(sql) do
+	for row in self.db:nrows(sql) do
 		return row.processed
 	end
 	return nil
@@ -610,7 +650,7 @@ local k = "'"
 	
 	returnTable = {}
 	
-	for row in sqlitework.db:nrows(sql) do
+	for row in self.db:nrows(sql) do
 		returnTable[i]={}
 		returnTable[i]['order_num']=row.order_num
 		returnTable[i]['trans_id']=trans_id

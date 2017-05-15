@@ -1,11 +1,8 @@
 --common classes
-dofile ("c:\\WORK\\lua\\ENS_LUA_Common_Classes\\class.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
 
-dofile ("c:\\WORK\\lua\\ENS_LUA_Common_Classes\\Helper.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Helper.lua")
 
-
-
---dofile ("c:\\WORK\\lua\\ENS_LUA_Common_Classes\\logs.lua")
 
 function OnInit(path)
 	helper= Helper()
@@ -18,9 +15,12 @@ end
 function main()
 
 message('test time functions in class Helper')
-message(tostring(helper:getHRTime4()))
-message(tostring(helper:getHRTime3(10)))
-message(tostring(helper:getHRTime2()))
-message(tostring(helper:getHRTime()))
+message('getHRTime4: '..tostring(helper:getHRTime4()))
+message('getHRTime3: '..tostring(helper:getHRTime3(10)))
+message('getHRTime2: '..tostring(helper:getHRTime2()))
+message('getHRTime:  '..tostring(helper:getHRTime()))
+message('getMiliSeconds: '..tostring(helper:getMiliSeconds()))
+message('getMiliSeconds_trans_id: '..tostring(helper:getMiliSeconds_trans_id()))
+
 
 end
