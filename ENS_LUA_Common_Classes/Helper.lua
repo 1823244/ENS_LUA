@@ -1,5 +1,6 @@
 Helper = class(function(acc)
 end)
+
 function Helper:Init()
 end
 function Helper:LoadFromFile(fileName)
@@ -106,4 +107,31 @@ function Helper:getHRTime5()
   minute = tostring(os.date("*t").min)
   
   return hour * 10000 + minute * 100
+end
+
+--возвращает дату сделки в строковом формате SQL '2016-11-06' (для правильной сортировки в таблицах)
+--datetime - таблица, поля: day, month, year
+function Helper:get_trade_date_sql(datetime)
+
+  local z = ''
+  
+  local day = ''
+  
+  if datetime.day<10 then 
+    z = '0' 
+  else
+    z = ''
+  end
+  day = z..tostring(datetime.day)
+   
+  local month = ''
+  
+  if datetime.month<10 then 
+    z = '0' 
+  else
+    z = ''
+  end
+  month = z..tostring(datetime.month)
+
+  return tostring(datetime.year)..'-'..month..'-'..day
 end

@@ -18,6 +18,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Trader.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Transactions.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Security.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logs.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\SQLiteWork.lua")
 
 --common within one strategy
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
@@ -37,6 +38,7 @@ settings={}
 strategy={}
 security={}
 window={}
+sqlitework={}
 
 logs={}
 
@@ -84,6 +86,9 @@ function OnInit(path)
 	transactions=Transactions()
 	transactions:Init(settings.ClientBox,settings.DepoBox, settings.SecCodeBox,settings.ClassCode)
 
+	sqlitework = SQLiteWork()
+	sqlitework:Init()  
+  
 end
 
 --это не обработчик события, а просто функция покупки
@@ -188,7 +193,7 @@ function OnParam( class, sec )
 	--l – легенда (подпись) графика.
 
 	--[1]функция getCandlesByIndex требует указывать, с какой по счету свечи мы получаем данные, 
-	--а счет начинается с самой левой свечки. Она имеет номер 0, а самая права, текущая, 
+	--а счет начинается с самой левой свечки. Она имеет номер 0, а самая правая, текущая, 
 	--соответственно N-1 – на единицу меньше количества свечек.
 	
 	--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
@@ -275,6 +280,40 @@ function OnTransReply(trans_reply)
 
 end 
 
+--событие, возникающее после поступления сделки
+function OnTrade(trade)
+	
+	
+	local robot_id=''	--dummy
+	
+	--нам требуется поле
+	--trade.trans_id
+	--еще есть поле
+	--trade.order_num
+	
+	--нужно найти в таблице заявок этот trans_id. может быть несколько заявок (может ли?)
+	--сравнить количество в сделке и количество в заявке
+	--если равны - заявка исполнена целиком, можно:
+	--		сменить ее статус
+	--		проверить позицию (план и факт). если равны - закончить обработку заявки и сигнала
+	--иначе - исполняем частично и ждем дальше
+	--под частичным исполнением подразумеваем, что сделка увеличит размер позиции на свое количество
+	
+	tableOrders = strategy:findOrders(trade.trans_id) --это обычная таблица луа, индексация числовая, начинается с нуля
+	local count = 0
+	while count <= table.maxn(tableOrders) do
+        
+        if tableOrders[count]['qty'] == trade.qty then
+			--заявка исполнена полностью
+		else
+			--заявка исполнена частично
+		end
+		
+		count=count+1
+    end
+	
+end
+
 --f_cb – функция обратного вызова для обработки событий в таблице. вызывается из main()
 --(или, другими словами, обработчик клика по таблице робота)
 --параметры:
@@ -351,6 +390,17 @@ end
 --главная функция робота, которая гоняется в цикле
 function main()
 
+	--создаем таблицу сигналов в базе
+	sqlitework:createTableSignals()
+	--создаем таблицу позиций в базе
+	sqlitework:createTablePositions()
+	
+	sqlitework:createTableOrders()
+	
+	
+
+	
+	
 	--создаем окно робота с таблицей и добавляем в эту таблицу строки
 	window = Window()									--функция Window() расположена в файле Window.luac и создает класс
 	
@@ -384,6 +434,8 @@ function main()
 	window:AddRow({"Старт",""},"Green")
 
 
+	funcTest()	
+	
 	--QLUA SetTableNotificationCallback
 	--Задание функции обратного вызова для обработки событий в таблице. 
 	--Формат вызова: 
@@ -418,4 +470,48 @@ function main()
 		sleep(1000)
 	end
 
+end
+
+--запускает тест стратегии
+function funcTest()
+
+	--очистить таблицы сигналов и позиций
+	--sqlitework:executeSQL('delete from positions')
+	--sqlitework:executeSQL('delete from signals')
+	
+	
+		NumCandles = getNumCandles(settings.IdPriceCombo)	
+ 
+	if NumCandles==0 then
+		return 0
+	end
+ 
+	strategy.NumCandles=2
+	
+	--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
+	tPrice,n,s = getCandlesByIndex(settings.IdPriceCombo,0,NumCandles-3, 2)		
+	strategy:SetSeries(tPrice)
+		
+	--далее пошли запрашивать цены с графика moving averages
+	tPrice,n,s = getCandlesByIndex(settings.IdMA,0,NumCandles-3, 2)		
+	strategy.Ma1Series=tPrice	--этого поля (Ma1Series) нет в Init, оно создается здесь
+
+	security:Update()		--обновляет цену последней сделки в таблице security (свойство Last,Close)
+	strategy.Position=trader:GetCurrentPosition(settings.SecCodeBox,settings.ClientBox)
+	
+	
+	--добавить сигнал
+	
+	strategy:CalcLevels()
+	if strategy:findSignal('buy')  == false then
+		strategy:saveSignal('buy')
+	end	
+	--[[
+	if strategy:findSignal('sell')  == false then
+		strategy:saveSignal('sell')
+	end
+	--]]
+		
+	strategy:processSignal('buy')
+	
 end
