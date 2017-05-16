@@ -77,6 +77,7 @@ function Helper:getMiliSeconds_trans_id()
   return string.format("%s", tostring(self:getHRTime4()) .. ms2)
 end
 
+--18:24:55
 function Helper:getHRTime2()
   hour = tostring(os.date("*t").hour)
   minute = tostring(os.date("*t").min)

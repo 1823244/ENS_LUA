@@ -221,6 +221,76 @@ function Strategy:DoBisness()
   
 end
 
+function Strategy:insert_positions(sig_id, direction, trade)
+
+	local k = "'"
+				  
+	local flags = 64
+	if direction == 'sell' then
+		flags = 68
+	end
+	
+local sql=' insert into positions ('..
+'client_code'..
+',depo_code'..
+',trade_num'..
+',sec_code'..
+',class_code'..
+',price'..
+',qty'..
+',date'..
+',time'..
+',robot_id'..
+',signal_id'..
+',direction'..
+',order_num'..
+',brokerref'..
+',userid'..
+',firmid'..
+',account'..
+',value'..
+',flags'..
+',trade_currency'..
+',trans_id'..
+
+
+')  VALUES ( '..
+
+
+		''..k..settings.DepoBox..k..''..
+		','..k..settings.ClientBox..k..''..
+		','..tostring(trade.trade_num)..
+		','..k..settings.SecCodeBox..k..''..
+		','..k..settings.ClassCode..k..''..
+		','..tostring(trade.price)..
+		','..tostring(trade.qty)..
+
+		','..k..helper:get_trade_date_sql(trade.datetime)..k..''..
+		','..k..helper:getHRTime2(trade.datetime)..k..''..
+		','..k..settings.robot_id..k..''..
+		','..k..sig_id..k..''..
+
+		','..k..direction..k..''..
+		 
+		','..tostring(trade.order_num)..
+		','..k..trade.brokerref..k..''..
+		','..k..trade.userid..k..''..
+		','..k..trade.firmid..k..''..
+		','..k..trade.account..k..''..
+		
+		','..tostring(trade.value)..
+		','..tostring(flags)..
+		','..k..trade.trade_currency..k..
+		','..tostring(trade.trans_id)..
+		');'
+          --message(sql)                     
+           self.db:exec(sql)  
+		   
+		  -- logs:add(sql)
+end
+
+
+
 function Strategy:test_insert_positions(sig_id, direction, trans_id)
 
 	local k = "'"
@@ -487,12 +557,6 @@ function Strategy:processSignal(direction)
 	--для тестов на всякий случай выберем один последний сигнал (LIMIT 1)
 	
 	local k = "'"
-	
-
-		
-		
-			
-			
 	
 	local sql = [[
 	

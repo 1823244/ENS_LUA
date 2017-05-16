@@ -295,7 +295,7 @@ end
 
 --событие, возникающее после поступления сделки
 function OnTrade(trade)
-	
+	message('onTrade '..helper:getMiliSeconds())
 	safeIterationsTradesCount = safeIterationsTradesCount + 1
 	if safeIterationsTradesCount >= safeIterationsTradesLimit then
 		is_run = false
@@ -335,33 +335,59 @@ function OnTrade(trade)
 			and
 			order_num	= ]] ..tostring(trade.order_num)
 	
+	
+	local i=0
 	for row in db:nrows(sql) do
+		message('ontrade found signal. go to insert position. trans_id='..tostring(trade.trans_id)..', order_num='..tostring(trade.order_num))
 		--обновить позицию
-		strategy:test_insert_positions(row.signal_id, helper:what_is_the_direction(trade), trade.trans_id)
+		--strategy:test_insert_positions(row.signal_id, helper:what_is_the_direction(trade), trade.trans_id)
+		strategy:insert_positions(row.sig_id, helper:what_is_the_direction(trade), trade)
+		i=i+1
+	end
+	if i==0 then
+		message('ontrade can not find signal. trans_id='..tostring(trade.trans_id)..', order_num='..tostring(trade.order_num))
 	end
 	
 
-		--[[
+		--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
+		local LotsToPosition = tonumber(settings.LotSizeBox)
+		
+		--посмотреть, сколько уже лотов/контрактов есть в позиции (с отбором по этому роботу)
+		local realPos = 0
+		--это строка рекордсета		
+		AlreadyInPosition = strategy:findPosition(settings.SecCodeBox, settings.ClassCode, settings.ClientBox, settings.DepoBox, settings.robot_id)
+		if strategy:checkNill(AlreadyInPosition) then
+			--no position
+		else
+			if AlreadyInPosition.qty < 0 then 
+				realPos = -1*AlreadyInPosition.qty
+			else
+				realPos = AlreadyInPosition.qty
+			end
+		
+		end
+	
+	
+		
 		--после окончания добора в поле processed пишем число 1
 		if realPos == LotsToPosition then
-			self:updateSignalStatus(sig_id, 1)
-			if self:checkSignalStatus(sig_id, 1) == 1 then
+			strategy:updateSignalStatus(sig_id, 1)
+			if strategy:checkSignalStatus(sig_id, 1) == 1 then
 				--it is OK
 			else
 				--update failed. что делать???
 				message('fail to update signal status')
 			end
 		else
-			--доделать обработчик. а вообще, что делать в этой ситуации?
-			message('не удалось открыть позицию требуемого размера')
+			--просто ждем окончания набора позиции
 		end
-		--]]	
+		
 	
 	
 end
 
 function OnOrder(order)
-
+	message('onOrder '..helper:getMiliSeconds())
 	safeIterationsOrdersCount = safeIterationsOrdersCount + 1
 	if safeIterationsOrdersCount >= safeIterationsOrdersLimit then
 		is_run = false
@@ -577,6 +603,7 @@ function funcTest()
 	--sqlitework:executeSQL('delete from positions')
 	--sqlitework:executeSQL('delete from signals')
 	
+	--[[
 	local k="'"
 	local trans_id = helper:getMiliSeconds_trans_id()
 	local sql = 'insert into transid (trans_id,signal_id,order_num,robot_id) values ('..tostring(trans_id)..','..tostring(44)..',0,'..k.. settings.robot_id ..k..')'
@@ -585,6 +612,7 @@ function funcTest()
 		message('error on insert to transid. error code is '..tostring(ret))
 	end
 	--logs:add(sql)	
+	--]]
 	
 	NumCandles = getNumCandles(settings.IdPriceCombo)	
  
