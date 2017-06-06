@@ -4,9 +4,15 @@ end)
 function Window:Init(caption, columns)
   self.hID = AllocTable()
   self.columns = {} --ENS добавим поле columns, чтобы потом можно было найти  номер колонки по имени
-  i = 1
+  local i = 1
+  local lent = 0
   for key, value in pairs(columns) do
-    AddColumn(self.hID, i, value, true, QTABLE_STRING_TYPE, 20)
+	if value == 'Message_' then 
+		lent = 100
+	else
+		lent = 20
+	end
+    AddColumn(self.hID, i, value, true, QTABLE_STRING_TYPE, lent)
 	self.columns[i]=value --ENS добавим поле columns, чтобы потом можно было найти  номер колонки по имени
     i = i + 1
   end
@@ -22,12 +28,12 @@ function Window:InsertValue(id, value)
     return
   end
   rows, columns = GetTableSize(self.hID)
-  i = 1
-  j = 1
+  local i = 1
+  local j = 1
   while i <= columns do
     j = 1
     while j <= rows do
-      x = GetCell(self.hID, j, i)
+      local x = GetCell(self.hID, j, i)
       if x ~= nil and x.image == id then
         SetCell(self.hID, j + 1, i, value)
       end
@@ -39,12 +45,12 @@ end
 
 function Window:SetValueWithColor(id, value, color)
   rows, columns = GetTableSize(self.hID)
-  i = 1
-  j = 1
+  local i = 1
+  local j = 1
   while i <= columns do
     j = 1
     while j <= rows do
-      x = GetCell(self.hID, j, i)
+      local x = GetCell(self.hID, j, i)
       if x ~= nil and x.image == id then
         SetCell(self.hID, j, i, value)
         if color == "Grey" then
@@ -109,6 +115,7 @@ function Window:AddRow(row, color)
   InsertRow(self.hID, rows)
   i = 1
   for key, value in pairs(row) do
+  --message(value)
     SetCell(self.hID, rows, i, tostring(value))
     i = i + 1
   end

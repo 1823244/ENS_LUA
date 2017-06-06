@@ -5,6 +5,14 @@ local settings = {}
 --local sqlitework = {}
 local logs = {}
 
+
+local math_abs = math.abs
+
+--этот флаг включается при возникновении нового сигнала и выключается после его полной обработки
+local new_signal = false
+local sig_id = nil
+local waitForPosUpdate = false --глобальный флаг,при котором заявки не шлем,а ждем пока обновится позиция
+ 
 Strategy = class(function(acc)
 end)
 
@@ -84,6 +92,11 @@ function Strategy:Init()
   
   self.PredClose = 0
   
+  self.logstoscreen = nil
+  
+	
+  self.db = nil --сюда передадим коннект к базе данных sqlite из главного файла робота 
+  
   settings = Settings()
   settings:Init()  
 	
@@ -98,7 +111,7 @@ function Strategy:Init()
   helper = Helper()
   helper:Init()  
 
-  self.db = nil --сюда передадим коннект к базе данных sqlite из главного файла робота
+
 end
 
 function Strategy:SetSeries(priceSeries)
@@ -155,70 +168,106 @@ function Strategy:CalcLevels()
 end
 
 --********************************************************************************
---********************************************************************************
---********************************************************************************
---********************************************************************************
---********************************************************************************
 --похоже, это основная функция. она вызывается из файла робота, из функции OnParam().
 --********************************************************************************
---********************************************************************************
---********************************************************************************
---********************************************************************************
---********************************************************************************
-function Strategy:DoBisness()
+function Strategy:DoBisness(test)
 
 	--получить текущие значения цены и предыдущих свечей
 	self:CalcLevels()
-  
-	--работа с режимом взята из аналогичного робота на QPILE
-	local enter_quantity= 0
-	local exit_quantity	= 0
-  
-    if settings.rejim == "revers" then
-        enter_quantity	= self.LotToTrade 	- self.Position
-        exit_quantity	= self.LotToTrade	+ self.Position
-    end
  
-	if settings.rejim == "long" then
-        enter_quantity	= self.LotToTrade	- self.Position
-        exit_quantity	= self.Position
-    end
- 
-    if settings.rejim == "short" then
-        enter_quantity	= -self.Position
-        exit_quantity	= self.LotToTrade	+ self.Position
-    end
+	 -- self.logstoscreen:add('DoBisness: sig_id = '..tostring(sig_id))
+	  
+	  --пока включен этот глобальный флаг, проверяем результаты выставления заявок и совершения сделок
+	if new_signal == true and sig_id ~= nil then
+		--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
+		local LotsToPosition = tonumber(settings.LotSizeBox)
+		
+		--получим актуальную позицию	
+		local realPos = trader:GetCurrentPosition(settings.SecCodeBox, settings.ClientBox)
+		
+		self.logstoscreen:add('DoBisness: real position is '..tostring(realPos))
+		
+		--после окончания добора в поле processed пишем число 1
+		if math_abs( realPos ) >= LotsToPosition then
+		
+		--self.logstoscreen:add('DoBisness test 1:  sig_id is '..tostring(sig_id))
+		
+			self:updateSignalStatus(sig_id, 1)
+			
+			if self:checkSignalStatus(sig_id, 1) == 1 then
+				--it is OK
+				--выключаем флаг и ждем следующего сигнала
+				new_signal = false
+				sig_id = nil
+			else
+				--update failed. что делать???
+				self.logstoscreen:add('fail to update signal status')
+			end
+		else
+			--просто ждем окончания набора позиции
+		end
+		self.logstoscreen:add('new_signal = '..tostring(new_signal))
+		
+		
+	else
 
- 
-  --закрытие свечи выше средней - покупка
-  if self:signal_buy() == true	then 
-	
-	if self:findSignal('buy')  == false then
-		self:saveSignal('buy')
-	end
-	
-	self:processSignal('buy')
- 	
-  end
-  
-  --закрытие часовика ниже средней - продажа
-  if self:signal_sell() == true	then 
-	
-	if self:findSignal('sell')  == false then
-		self:saveSignal('sell')
-	end
-	
-	self:processSignal('sell')
- 	
-  end
+		self.logstoscreen:add('new_signal is false ')
+		
+		 if test == true then
+			sig_id = self:findSignal2()
+				if sig_id  == false then
+					sig_id = self:saveSignal('sell')
+					self.logstoscreen:add('сохранили новый сигнал '..tostring(sig_id))
+				else
+					self.logstoscreen:add('нашли необработанный сигнал '..tostring(sig_id))
+				end
+				
+				self:processSignal('sell')
+				
+				--включаем флаг, который выключим лишь после обработки сигнала
+				new_signal = true
+				self.logstoscreen:add('new_signal = '..tostring(new_signal))
+		 else
+			  --закрытие свечи выше средней - покупка
+			  if self:signal_buy() == true	then 
+				
+				if self:findSignal2()  == false then
+					sig_id = self:saveSignal('buy')
+				end
+				
+				self:processSignal('buy')
+				
+				--включаем флаг, который выключим лишь после обработки сигнала
+				new_signal = true
+				self.logstoscreen:add('new_signal = '..tostring(new_signal))
+			  --закрытие часовика ниже средней - продажа
+			  elseif self:signal_sell() == true	then 
+				
+				if self:findSignal2()  == false then
+					sig_id = self:saveSignal('sell')
+				end
+				
+				self:processSignal('sell')
+				
+				--включаем флаг, который выключим лишь после обработки сигнала
+				new_signal = true
+				self.logstoscreen:add('new_signal = '..tostring(new_signal))
+			  end
+		end
+		
+	end	
+		
+		
 
-  --это надо или нет?
-  self.PredLast = security.last
-  self.PredClose = security.close
   
-  --message('test')
-  --self:test_insert_positions()
-  
+end
+
+function Strategy:enterToPosition()
+end
+
+function checkSignal()
+
+
 end
 
 function Strategy:insert_positions(sig_id, direction, trade)
@@ -257,7 +306,7 @@ local sql=' insert into positions ('..
 ')  VALUES ( '..
 
 
-		''..k..settings.DepoBox..k..''..
+		''..k..tostring(settings.DepoBox)..k..''..
 		','..k..settings.ClientBox..k..''..
 		','..tostring(trade.trade_num)..
 		','..k..settings.SecCodeBox..k..''..
@@ -288,8 +337,6 @@ local sql=' insert into positions ('..
 		   
 		  -- logs:add(sql)
 end
-
-
 
 function Strategy:test_insert_positions(sig_id, direction, trans_id)
 
@@ -327,7 +374,7 @@ local sql=' insert into positions ('..
 ')  VALUES ( '..
 
 
-		''..k..settings.DepoBox..k..''..
+		''..k..tostring(settings.DepoBox)..k..''..
 		','..k..settings.ClientBox..k..''..
 		',321654987'..
 		','..k..settings.SecCodeBox..k..''..
@@ -373,6 +420,9 @@ function Strategy:signal_buy()
 end
 
 function Strategy:signal_sell()
+
+	--return true -- Для отладки
+---[[
   if self.Ma1 ~= 0 
 	and self.Ma1Pred  ~= 0 
 	and self.PriceSeries[0].close ~= 0
@@ -384,6 +434,7 @@ function Strategy:signal_sell()
   else
     return false
   end
+  --]]
 end
 
 function Strategy:checkNill(value)
@@ -400,23 +451,24 @@ end
 
 --вызывается из этого же файла. Strategy:DoBisness()
 function Strategy:Buy(LotToTrade, trans_id)
-  message("Buy " .. settings.SecCodeBox, 1)
+  self.logstoscreen:add("Buy " .. settings.SecCodeBox)
   --transactions:order(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade)
-  transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade, trans_id)
+  transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "B", settings.ClientBox, tostring(settings.DepoBox), tostring(tonumber(security.last) + 60 * security.minStepPrice), LotToTrade, trans_id)
+self.logstoscreen:add("transaction was sent "..helper:getMiliSeconds())
 end
 
 --вызывается из этого же файла. Strategy:DoBisness()
 function Strategy:Sell(LotToTrade, trans_id)
-  message("Sell " .. settings.SecCodeBox, 1)
+  self.logstoscreen:add("Sell " .. settings.SecCodeBox)
   --transactions:order        (settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade)
-  transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, settings.DepoBox, tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade, trans_id)
-  
+  transactions:orderWithId(settings.SecCodeBox, settings.ClassCode, "S", settings.ClientBox, tostring(settings.DepoBox), tostring(tonumber(security.last) - 60 * security.minStepPrice), LotToTrade, trans_id)
+  self.logstoscreen:add("transaction was sent "..helper:getMiliSeconds())
 end
 
 --сохраняет сигнал в таблицу сигналов.
 function Strategy:saveSignal(direction)
 
-	message('saveSignal')
+	self.logstoscreen:add('saveSignal')
 	
 	local k = "'"
 	local sql = [[
@@ -465,6 +517,21 @@ function Strategy:saveSignal(direction)
 	
 	self.db:exec(sql)
 
+sql = [[
+	
+		select 
+			rownum 
+		from 
+			signals
+		order by
+			rownum DESC
+		limit 1		
+		]]	
+	for row in self.db:nrows(sql) do
+		return row.rownum
+		
+	end
+	return nil
 end
 
 --ищет сигнал в базе. если он есть, возвращает ИСТИНА
@@ -481,7 +548,7 @@ function Strategy:findSignal(direction)
 		where
 
 			client_code=	]]..k.. settings.ClientBox ..k.. 	[[ and
-			depo_code=	]]..k.. settings.DepoBox ..k.. 		[[ and
+			depo_code=	]]..k.. tostring(settings.DepoBox) ..k.. 		[[ and
 			robot_id=		]]..k.. settings.robot_id ..k.. 		[[ and
 			sec_code=		]]..k.. settings.SecCodeBox ..k..	[[ and
 			class_code=	]]..k.. settings.ClassCode ..k..	[[ and
@@ -507,170 +574,136 @@ function Strategy:findSignal(direction)
 		
 end
 
---ищет позицию в базе. если она есть, возвращает количество бумаг (в лотах/контрактах)
+--выбирает последний необработанный сигнал в базе
 --параметры 
---	direction - строка, buy/sell
-function Strategy:findPosition(sec_code, class_code, client_code, depo_code, robot_id)
+function Strategy:findSignal2()
 	local k = "'"
 	local sql = [[
 	
 		select 
-			sec_code AS sec_code,
-			class_code AS class_code,
-			client_code AS client_code,
-			depo_code AS depo_code,
-			SUM(qty) AS qty
-		from 
-			positions
-		where
-
-			client_code=	]]..k.. client_code ..k.. 	[[ and
-			depo_code=	]]..k.. depo_code ..k.. 	[[ and
-			robot_id=		]]..k.. robot_id ..k.. 		[[ and
-			sec_code=		]]..k.. sec_code ..k..	[[and
-			class_code=	]]..k.. class_code ..k..	[[
-			
-		group by
-			client_code,
-			depo_code,
-			robot_id,
-			sec_code,
-			class_code
-		
-		]]
-	
-	
- 	for row in self.db:nrows(sql) do
-		return row		
-	end
-	return nil
-		
-end
-
---обработать сигнал
-function Strategy:processSignal(direction)
-
-	message('process signal')
-	--найти в базе необработанные сигналы и по-очереди их обработать
-	--пока ожидаем, что в один момент времени может быть один необработанный сигнал
-	
-	--для тестов на всякий случай выберем один последний сигнал (LIMIT 1)
-	
-	local k = "'"
-	
-	local sql = [[
-	
-		select 
-			* 
+			rownum 
 		from 
 			signals
 		where
 
-			client_code=	]]..k.. settings.ClientBox ..k.. 	[[ and
-			depo_code=		]]..k.. settings.DepoBox ..k.. 		[[ and
-			robot_id=		]]..k.. settings.robot_id ..k.. 		[[ and
-			sec_code=		]]..k.. settings.SecCodeBox ..k..	[[ and
-			class_code=		]]..k.. settings.ClassCode ..k..	[[ and
-			direction = 	]]..k.. direction ..k..	[[ and
-			processed=		0
+			client_code=	]]..k.. settings.ClientBox ..k.. 	[[
+			and depo_code=	]]..k.. settings.DepoBox ..k.. 		[[
+			and robot_id=		]]..k.. settings.robot_id ..k.. 		[[
+			and sec_code=		]]..k.. settings.SecCodeBox ..k..	[[
+			and class_code=	]]..k.. settings.ClassCode ..k..	[[
+			and price_id=		]]..k.. settings.IdPriceCombo ..k..[[
+			and MA_id=			]]..k.. settings.IdMA ..k..			[[
+			and processed = 0
 		order by
 			rownum DESC
-		LIMIT 1
+		limit 1
+		
+		]]
+	
+	for row in self.db:nrows(sql) do
+		return row.rownum
+	end
+	return false
+		
+end
+
+--обработать сигнал
+function Strategy:processSignal(sig_id)
+	
+	self.logstoscreen:add('process signal')
+
+	local k = "'"	
+	local sql = [[
+		select 
+			rownum,
+			direction
+		from 
+			signals
+		where
+			rownum=	]]..k.. tostring(sig_id) ..k.. 	[[
+			and processed=		0
 	]]
 	
 	local i = 0
 	
 	local safeCount = 0
 	
+	local direction = nil
+	
 	for row in self.db:nrows(sql) do
 		i=i+1
 		safeCount = safeCount+1
 		if safeCount >= 50 then
-			message('safely break loop in fn processSignal()')
+			self.logstoscreen:add('safely break loop in fn processSignal()')
+			logs:add('safely break loop in fn processSignal()')
 			break
 		end
-		message('was found a signal: '..tostring(row.rownum))
-		
-		local sig_id = row.rownum
-		 
-		--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
-		local LotsToPosition = tonumber(settings.LotSizeBox)
-		
-		--посмотреть, сколько уже лотов/контрактов есть в позиции (с отбором по этому роботу)
-		local realPos = 0
-		--это строка рекордсета		
-		AlreadyInPosition = self:findPosition(settings.SecCodeBox, settings.ClassCode, settings.ClientBox, settings.DepoBox, settings.robot_id)
-		if self:checkNill(AlreadyInPosition) then
-			--no position
-		else
-			if AlreadyInPosition.qty < 0 then 
-				realPos = -1*AlreadyInPosition.qty
-			else
-				realPos = AlreadyInPosition.qty
-			end
-		
-		end
-		
-		local safeCount2 = 0
-		
-		message('real position is: ' .. tostring(realPos))
-		
-		--если эти значение отличаются, то добираем позу
-		if realPos < LotsToPosition then
-			
-			safeCount2 = safeCount2+1
-			if safeCount2 >= 50 then
-				message('safely break loop 2 in fn processSignal()')
-				break
-			end
-			
-			--послать заявку
-			
-			local trans_id = helper:getMiliSeconds_trans_id()
-			
-			if direction == 'buy' then
-				self:Buy(LotsToPosition - realPos, trans_id)
-			elseif direction == 'sell' then
-				self:Sell(LotsToPosition - realPos, trans_id)
-			end
-			
-			--запоминаем trans_id в таблице transId
-			
-			sql = [[ 
-			insert into transId (trans_id
-				,signal_id
-				,order_num
-				,robot_id
-				) 
-			values (
-			]]..tostring(trans_id)..[[
-			,]]..tostring(sig_id)..[[
-			,0
-			,]]..k.. settings.robot_id ..k..[[
-			)
-			]]
-			self.db:exec(sql)
-			--logs:add(sql)
-			
-			--в процессе добора нужно обновлять таблицу позиции
-			--это нужно делать из функции OnTrade, отлавливая сделки по TRANSID
-			
-			--для отладки. закинуть строку в табл positions
-			--self:test_insert_positions(sig_id, direction, trans_id)
-			
-			--для отладки, чтобы зацикливания не проиходило
-			--realPos = LotsToPosition
-			
-		end
-		
-
-		
-		
-		
+		self.logstoscreen:add('was found a signal: '..tostring(row.rownum)..', direction '..row.direction)
+		direction=row.direction
 	end
 	
+	--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
+	local LotsToPosition = tonumber(settings.LotSizeBox)
+	
+	--посмотреть, сколько уже лотов/контрактов есть в позиции (с отбором по этому роботу)
+	local realPos = trader:GetCurrentPosition(settings.SecCodeBox, settings.ClientBox)
+	self.logstoscreen:add('real position is: ' .. tostring(realPos))
+	
+	local safeCount2 = 0
+	
+	
+	--если эти значения отличаются, то добираем позу
+	if math_abs(realPos) < LotsToPosition then
+		
+		safeCount2 = safeCount2+1
+		if safeCount2 >= 50 then
+			self.logstoscreen:add('safely break loop 2 in fn processSignal()')
+			logs:add('safely break loop 2 in fn processSignal()')
+			break
+		end
+		
+		--послать заявку
+		
+		local trans_id = helper:getMiliSeconds_trans_id()
+		
+		qty = LotsToPosition - math_abs(realPos)
+		
+		--!!!!!!!!!!!!для отладки. хочу проверить как будет отрабатывать ожидание добора позиции 
+		qty = 1
+		
+		if row.direction == 'buy' then
+			self:Buy(qty, trans_id)
+		elseif row.direction == 'sell' then
+			self:Sell(qty, trans_id)
+		end
+		
+		--запоминаем trans_id в таблице transId
+		
+		sql = [[ 
+		insert into transId (trans_id
+			,signal_id
+			,order_num
+			,robot_id
+			) 
+		values (
+		]]..tostring(trans_id)..[[
+		,]]..tostring(sig_id)..[[
+		,0
+		,]]..k.. settings.robot_id ..k..[[
+		)
+		]]
+		self.db:exec(sql)
+		--logs:add(sql)
+		
+	else
+		self.logstoscreen:add('вся позиция уже набрана, заявка не отправлена!')
+		new_signal = false
+	end
+		
+	
 	if i==0 then
-		message('no signals was found!')
+		self.logstoscreen:add('no signals was found!')
+		new_signal = false
 	end
 	
 end
@@ -678,6 +711,7 @@ end
 --обновить статус сигнала
 function Strategy:updateSignalStatus(sig_id, newStatus)
 
+--message(sig_id)
 	local sql = 'update signals set processed = '..tostring(newStatus)..' where rownum = ' .. tostring(sig_id)
 	
 	self.db:exec(sql)
@@ -687,6 +721,7 @@ end
 --проверить статус сигнала, обработан или нет
 function Strategy:checkSignalStatus(sig_id)
 
+	--message(sig_id)
 	local sql = 'select processed from signals  where rownum = ' .. tostring(sig_id)
 	
 	for row in self.db:nrows(sql) do

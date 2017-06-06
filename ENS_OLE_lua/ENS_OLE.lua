@@ -19,6 +19,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Transactions.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Security.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logs.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\SQLiteWork.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logstoscreen.lua")
 
 --common within one strategy
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
@@ -39,6 +40,7 @@ strategy={}
 security={}
 window={}
 sqlitework={}
+logstoscreen={}
 
 logs={}
 
@@ -59,7 +61,12 @@ safeIterationsTradesLimit = 5
 safeIterationsTradesCount = 0
 
 --local hID=0		--вроде бы не используется, зачем он тут нужен?
- 
+
+--переменна нужна для отображения анимации в окне робота,чтобы понимать,что он работает 
+local count_animation=0
+
+local math_abs = math.abs
+	
 function OnInit(path)
 
 	trader = Trader()
@@ -95,8 +102,15 @@ function OnInit(path)
 
 	sqlitework = SQLiteWork()
 	sqlitework:Init()  
+	
+  	logstoscreen = LogsToScreen()
+	logstoscreen:Init() 
+
+
   
   db = sqlite3.open(settings.dbpath)
+  
+
 end
 
 --это не обработчик события, а просто функция покупки
@@ -135,18 +149,29 @@ function OnStart()
 		  end	
   --]]
 	
+	--logstoscreen:add('test log')
+	--logstoscreen:add('test log 2')
+	
 end
 
 
 function OnStop(s)
 
-	window:Close()
+	--[[window:Close()
+	logstoscreen:CloseTable()
 	is_run = false
-	
+	--]]
+	StopScript()
 end 
 
 function StopScript()
 	window:Close()
+	--[[if logstoscreen ~= nil then
+		if logstoscreen.window ~= nil then
+			logstoscreen.window:Close()
+		end	
+	end	--]]
+	logstoscreen:CloseTable()
 	is_run=false
 end
 
@@ -155,154 +180,43 @@ end
 --sec - строка, код бумаги
 function OnParam( class, sec )
 
---[[
-    if is_run == false or working==false then
-        return
-    end
-	--]]
 	trans:CalcDateForStop()	--формирует строку ггммдд и возвращает ее в свойстве dateForStop таблицы trans
 	
     if (tostring(sec) ~= settings.SecCodeBox)  then
 		return 0
 	end
 		
-	time = os.date("*t")
-
-	strategy.Second=time.sec	--секунда
-
-	security:Update()	--обновляет цену последней сделки в таблице security (свойство Last,Close)
-
-	window:InsertValue("Цена",tostring(security.last))
-
-	--QLUA getNumCandles
-	--Функция предназначена для получения информации о количестве свечек по выбранному идентификатору. 
-	--Формат вызова: 
-	--NUMBER getNumCandles (STRING tag)
-	--Возвращает число – количество свечек по выбранному идентификатору. 
-
-	--источник комментов [1] - это http://robostroy.ru/community/article.aspx?id=796
-	--[1]Сначала мы получаем количество свечей. здесь: на графике цены
-	NumCandles = getNumCandles(settings.IdPriceCombo)	
- 
-	if NumCandles==0 then
-		return 0
-	end
- 
-	strategy.NumCandles=2
-
-	--QLUA getCandlesByIndex
-	--Функция предназначена для получения информации о свечках по идентификатору 
-	--(заказ данных для построения графика плагин не осуществляет, поэтому для успешного доступа нужный график должен быть открыт). 
-	--Формат вызова: 
-	--TABLE t, NUMBER n, STRING l getCandlesByIndex (STRING tag, NUMBER line, NUMBER first_candle, NUMBER count) 
-	--Параметры: 
-	--tag – строковый идентификатор графика или индикатора, 
-	--line – номер линии графика или индикатора. Первая линия имеет номер 0, 
-	--first_candle – индекс первой свечки. Первая (самая левая) свечка имеет индекс 0, 
-	--count – количество запрашиваемых свечек.
-	--Возвращаемые значения: 
-	--t – таблица, содержащая запрашиваемые свечки, 
-	--n – количество свечек в таблице t , 
-	--l – легенда (подпись) графика.
-
-	--[1]функция getCandlesByIndex требует указывать, с какой по счету свечи мы получаем данные, 
-	--а счет начинается с самой левой свечки. Она имеет номер 0, а самая правая, текущая, 
-	--соответственно N-1 – на единицу меньше количества свечек.
 	
-	--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
-	tPrice,n,s = getCandlesByIndex(settings.IdPriceCombo,0,NumCandles-3, 2)		
-	strategy:SetSeries(tPrice)
-
-
-		
-	--далее пошли запрашивать цены с графика moving averages
-	tPrice,n,s = getCandlesByIndex(settings.IdMA,0,NumCandles-3, 2)		
-	strategy.Ma1Series=tPrice	--этого поля (Ma1Series) нет в Init, оно создается здесь
-
-
-	security:Update()		--обновляет цену последней сделки в таблице security (свойство Last,Close)
-	strategy.Position=trader:GetCurrentPosition(settings.SecCodeBox,settings.ClientBox)
-	
-	--[[
-	local logfile = "c:\\TRAIDING\\ROBOTS\\DEMO\\ENS_MA_lua\\ARQA\\log.txt"
-	Helper:AppendInFile(logfile, "----------------------------------------".."\n")
-	--Helper:AppendInFile(logfile, "sec code: "..self.secCode.."\n")
-	Helper:AppendInFile(logfile, "sec code: "..tostring(settings.SecCodeBox).."\n")
-	Helper:AppendInFile(logfile, "Position: "..tostring(strategy.Position).."\n")	
-	Helper:AppendInFile(logfile, "settings.LotSizeBox: "..tostring(settings.LotSizeBox).."\n")	
-	Helper:AppendInFile(logfile, "strategy.LotToTrade: "..tostring(strategy.LotToTrade).."\n")	
-	--Helper:AppendInFile(logfile, "enter_quantity: "..tostring(enter_quantity).."\n")	
-	--Helper:AppendInFile(logfile, "exit_quantity: "..tostring(exit_quantity).."\n")	
-	Helper:AppendInFile(logfile, "rejim: "..tostring(settings.rejim).."\n")	
-	--]]
-	
-	strategy.secCode = sec --ENS для отладки
-	if working==true  then
-		strategy:DoBisness()
-	else
-		--ENS только показываем значения скользящих
-		strategy:CalcLevels()
-		
-	end
-	strategy.PredPosition=strategy.Position
-
-	
-	--обновляем данные в визуальной таблице робота
-	window:InsertValue("MA (60)",tostring(strategy.Ma1))
-	window:InsertValue("Close",tostring(strategy.PriceSeries[1].close))
-	
-	window:InsertValue("MA pred (60)",tostring(strategy.Ma1Pred))
-	window:InsertValue("PredClose",tostring(strategy.PriceSeries[0].close))
-	
-	window:InsertValue("Позиция",tostring(strategy.Position))
-
-	--для отладки
-	--покажем сигнал: buy/sell
-	
-	--strategy.PriceSeries[0].close - закрытие предпредыдущего бара (самого раннего из двух)
-	--strategy.PriceSeries[1].close - закрытие предыдущего бара
-	
-
-	---[[
-  --закрытие часовика выше средней - покупка
-	if strategy:signal_buy() == true then
-		window:InsertValue("Сигнал", 'buy')
-		logs:add('signal buy'..'\n')
-	else
-		window:InsertValue("Сигнал", '')
-		
-	end
-	
-	--закрытие часовика ниже средней - продажа
-	if strategy:signal_sell() == true then
-		window:InsertValue("Сигнал", 'sell')
-		logs:add('signal sell'..'\n')
-	else
-		window:InsertValue("Сигнал", '')
-		
-	end
-	
-	--]]
+	--main_loop()
 	
 end
 
 --событие, возникающее после отправки заявки на сервер
 function OnTransReply(trans_reply)
 
-	
+	--message('OnTransReply '..helper:getMiliSeconds())
+	logstoscreen:add('OnTransReply '..helper:getMiliSeconds())
 
 end 
 
 --событие, возникающее после поступления сделки
 function OnTrade(trade)
-	message('onTrade '..helper:getMiliSeconds())
+	--message('onTrade '..helper:getMiliSeconds())
+	logstoscreen:add('onTrade '..helper:getMiliSeconds())
+	--[[
 	safeIterationsTradesCount = safeIterationsTradesCount + 1
 	if safeIterationsTradesCount >= safeIterationsTradesLimit then
 		is_run = false
 		working = false
-		message('safely break script (OnTrade)')
+		logstoscreen:add('safely break script (OnTrade)')
+		logs:add('safely break script (OnTrade)')
 		StopScript()
 	end
+	--]]
+	
+	--добавим номер заявки к сигналу, на основании которого она создана
+	add_order_num_to_signal(trade.trans_id, trade.order_num)
+	
 	
 	local robot_id=''	--dummy
 	
@@ -320,84 +234,34 @@ function OnTrade(trade)
 	--иначе - исполняем частично и ждем дальше
 	--под частичным исполнением подразумеваем, что сделка увеличит размер позиции на свое количество
 	
-	--tableOrders = strategy:findOrders(trade.trans_id) --это обычная таблица луа, индексация числовая, начинается с нуля
-	
-	local k = "'"
-	local sql = [[
-	
-		select 
-			signal_id,
-			robot_id
-		from 
-			transId
-		where
-			trans_id	= ]].. tostring(trade.trans_id) .. [[
-			and
-			order_num	= ]] ..tostring(trade.order_num)
-	
-	
-	local i=0
-	for row in db:nrows(sql) do
-		message('ontrade found signal. go to insert position. trans_id='..tostring(trade.trans_id)..', order_num='..tostring(trade.order_num))
-		--обновить позицию
-		--strategy:test_insert_positions(row.signal_id, helper:what_is_the_direction(trade), trade.trans_id)
-		strategy:insert_positions(row.sig_id, helper:what_is_the_direction(trade), trade)
-		i=i+1
-	end
-	if i==0 then
-		message('ontrade can not find signal. trans_id='..tostring(trade.trans_id)..', order_num='..tostring(trade.order_num))
-	end
-	
 
-		--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
-		local LotsToPosition = tonumber(settings.LotSizeBox)
-		
-		--посмотреть, сколько уже лотов/контрактов есть в позиции (с отбором по этому роботу)
-		local realPos = 0
-		--это строка рекордсета		
-		AlreadyInPosition = strategy:findPosition(settings.SecCodeBox, settings.ClassCode, settings.ClientBox, settings.DepoBox, settings.robot_id)
-		if strategy:checkNill(AlreadyInPosition) then
-			--no position
-		else
-			if AlreadyInPosition.qty < 0 then 
-				realPos = -1*AlreadyInPosition.qty
-			else
-				realPos = AlreadyInPosition.qty
-			end
-		
-		end
-	
-	
-		
-		--после окончания добора в поле processed пишем число 1
-		if realPos == LotsToPosition then
-			strategy:updateSignalStatus(sig_id, 1)
-			if strategy:checkSignalStatus(sig_id, 1) == 1 then
-				--it is OK
-			else
-				--update failed. что делать???
-				message('fail to update signal status')
-			end
-		else
-			--просто ждем окончания набора позиции
-		end
-		
 	
 	
 end
 
 function OnOrder(order)
-	message('onOrder '..helper:getMiliSeconds())
+	logstoscreen:add('onOrder '..helper:getMiliSeconds())
+	--[[
 	safeIterationsOrdersCount = safeIterationsOrdersCount + 1
 	if safeIterationsOrdersCount >= safeIterationsOrdersLimit then
 		is_run = false
 		working = false
-		message('safely break script (OnOrder)')
+		logstoscreen:add('safely break script (OnOrder)')
+		logs:add('safely break script (OnOrder)')
 		StopScript()
 	end
+	--]]
+
+	--добавим номер заявки к сигналу, на основании которого она создана
+	-- 27 05 17. отсюда бесполезно вызывать эту функцию, т.к. колбэк OnOrder возникает позже,чем OnTrade :(
+	-- add_order_num_to_signal(order.trans_id, order.order_num)
+	
+	
+end
+
+function add_order_num_to_signal(trans_id, order_num)
 
 
-	local k = "'"
 	--ищем заявку с таким же trans_id
 	local sql = [[
 	select
@@ -405,20 +269,19 @@ function OnOrder(order)
 	from
 		transId
 	where
-		trans_id = ]] .. tostring(order.trans_id)
+		trans_id = ]] .. tostring(trans_id)
 	
-	--помещаем в ту строку номер заявки
+	--помещаем в найденную строку номер заявки
 	for row in db:nrows(sql) do
 		sql = [[
 		update
 			transId
 		set
-			order_num = ]] ..tostring(order.order_num) .. [[
+			order_num = ]] ..tostring(order_num) .. [[
 		where
 			rownum = ]] ..tostring(row.rownum)
 		db:exec(sql)
 	end
-	
 	
 end
 
@@ -460,7 +323,7 @@ local f_cb = function( t_id,  msg,  par1, par2)
 	if x~=nil then
 		if (msg==QTABLE_LBUTTONDBLCLK) and x["image"]=="Старт" then
 			OnStart()
-			message("Старт",1)
+			--message("Старт",1)
 			window:SetValueWithColor("Старт","Остановка","Red")
 			working=true
 		end
@@ -475,11 +338,21 @@ local f_cb = function( t_id,  msg,  par1, par2)
 			--working=true
 		end
 	end
+	
+	--для отладки
+	if x~=nil then
+		if (msg==QTABLE_LBUTTONDBLCLK) and x["image"]=="check position" then
+			--message("TEST",1)
+			checkPositionTest()
+			--window:SetValueWithColor("Старт","Остановка","Red")
+			--working=true
+		end
+	end	
 
 	if x~=nil then
 		if (msg==QTABLE_LBUTTONDBLCLK) and x["image"]=="Остановка" then
 
-			message("Остановка",1)
+			--message("Остановка",1)
 			window:SetValueWithColor("Остановка","Старт","Green")
 			working=false
 		end
@@ -489,16 +362,19 @@ local f_cb = function( t_id,  msg,  par1, par2)
 
 
 	if (msg==QTABLE_CLOSE)  then
-		window:Close()
+		--[[window:Close()
 		is_run = false
 		--message("Стоп",1)
+		--]]
+		StopScript()
 	end
 
 	if msg==QTABLE_VKEY then
-		--message(par2)
+			--message(par2)
 		if par2 == 27 then-- esc
-			window:Close()
-			is_run=false
+			StopScript()
+			--window:Close()
+			--is_run=false
 			
 		end
 	end	
@@ -508,6 +384,12 @@ end
 --главная функция робота, которая гоняется в цикле
 function main()
 
+
+	--для отладки - автостарт
+	--working = true
+	
+	strategy.db = db
+	
 	--создаем таблицу сигналов в базе
 	sqlitework.db = db
 	sqlitework:createTableSignals()
@@ -522,6 +404,33 @@ function main()
 	sqlitework:createTableTransId()
 
 	
+	
+	--создаем окно робота с таблицей и добавляем в эту таблицу строки
+	create_window()
+	
+	SetTableNotificationCallback (window.hID, f_cb)
+
+	strategy.logstoscreen = logstoscreen
+	
+	--задержка 100 миллисекунд между итерациями 
+	local i=0
+	while is_run do
+		i=i+1
+		animation()
+		
+		if i >= 10 then
+			main_loop()
+			i=0
+		end
+		sleep(100)
+		
+	end
+
+end
+
+
+function create_window()
+
 	
 	--создаем окно робота с таблицей и добавляем в эту таблицу строки
 	window = Window()									--функция Window() расположена в файле Window.luac и создает класс
@@ -556,103 +465,116 @@ function main()
 	window:AddRow({"Старт",""},"Green")
 	window:AddRow({"",""},"")
 	window:AddRow({"TEST",""},"Green")
+	window:AddRow({"",""},"")
+	window:AddRow({"check position",""},"Green")
+end
 
 
-	
-	
-	--QLUA SetTableNotificationCallback
-	--Задание функции обратного вызова для обработки событий в таблице. 
-	--Формат вызова: 
-	--NUMBER SetTableNotificationCallback (NUMBER t_id, FUNCTION f_cb)
-	--Параметры: 
-	--t_id – идентификатор таблицы, 
-	--f_cb – функция обратного вызова для обработки событий в таблице.
-	--В случае успешного завершения функция возвращает «1», иначе – «0». 
-	--Формат вызова функции обратного вызова для обработки событий в таблице: 
-	--f_cb = FUNCTION (NUMBER t_id, NUMBER msg, NUMBER par1, NUMBER par2)
-	--Параметры: 
-	--t_id – идентификатор таблицы, для которой обрабатывается сообщение, 
-	--par1 и par2 – значения параметров определяются типом сообщения msg, 
-	--msg – код сообщения.
-	
-	SetTableNotificationCallback (window.hID, f_cb)
+function main_loop()
 
-	--автозапуск
+		security:Update()	--обновляет цену последней сделки в таблице security (свойство Last,Close)
+
+		window:InsertValue("Цена",tostring(security.last))		
+
+		--источник комментов [1] - это http://robostroy.ru/community/article.aspx?id=796
+		--[1]Сначала мы получаем количество свечей. здесь: на графике цены
+		NumCandles = getNumCandles(settings.IdPriceCombo)	
+	 
+		if NumCandles==0 then
+			--return 0
+		end
+	 
+		strategy.NumCandles=2
+		
+		--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
+		tPrice,n,s = getCandlesByIndex(settings.IdPriceCombo,0,NumCandles-3, 2)		
+		strategy:SetSeries(tPrice)
+
+		--далее пошли запрашивать цены с графика moving averages
+		tPrice,n,s = getCandlesByIndex(settings.IdMA,0,NumCandles-3, 2)		
+		strategy.Ma1Series=tPrice	--этого поля (Ma1Series) нет в Init, оно создается здесь
+
+		security:Update()		--обновляет цену последней сделки в таблице security (свойство Last,Close)
+		strategy.Position=trader:GetCurrentPosition(settings.SecCodeBox,settings.ClientBox)
+		
+		strategy.secCode = sec --ENS для отладки
+		if working==true  then
+			strategy:DoBisness()
+		else
+			--ENS только показываем значения скользящих
+			strategy:CalcLevels()
+			
+		end
+		strategy.PredPosition=strategy.Position
+
+		
+		--обновляем данные в визуальной таблице робота
+		window:InsertValue("MA (60)",tostring(strategy.Ma1))
+		window:InsertValue("Close",tostring(strategy.PriceSeries[1].close))
+		
+		window:InsertValue("MA pred (60)",tostring(strategy.Ma1Pred))
+		window:InsertValue("PredClose",tostring(strategy.PriceSeries[0].close))
+		
+		window:InsertValue("Позиция",tostring(strategy.Position))
+
+		--для отладки
+		--покажем сигнал: buy/sell
+		
+		--strategy.PriceSeries[0].close - закрытие предпредыдущего бара (самого раннего из двух)
+		--strategy.PriceSeries[1].close - закрытие предыдущего бара
+		
+
+		---[[
+		--закрытие часовика выше средней - покупка
+		
+	  
+		if strategy:signal_buy() == true then
+			window:InsertValue("Сигнал", 'buy')
+			logs:add('signal buy'..'\n')
+		elseif strategy:signal_sell() == true then
+		--закрытие часовика ниже средней - продажа
+			window:InsertValue("Сигнал", 'sell')
+			logs:add('signal sell'..'\n')			
+			
+		end
 	
-	--для массового тестирования этот флаг надо сразу включать, т.к. вручную неудобно если роботов много
-	--[[ для продакшн - нужно выключить автозапуск
-	if working == false then
-		OnStart()
-		message("Старт",1)
-		window:SetValueWithColor("Старт","Остановка","Red")
-		working=true
-	end
-	--]]
-	
-	--задержка 100 миллисекунд между итерациями 
-	while is_run do
-		sleep(1000)
-	end
+
 
 end
 
---запускает тест стратегии
+function animation()
+	  
+	if working==false then return false end
+	
+			local symb = ''
+			
+			if count_animation == 0 then
+				symb = "-"
+			elseif count_animation == 1 then
+				symb = "\\"
+			elseif count_animation == 2 then
+				symb = "|"
+			elseif count_animation == 3 then
+				symb = "/"
+			end
+			count_animation=count_animation+1
+			if count_animation>3 then
+				count_animation = 0
+			end
+			window:InsertValue("Сигнал", symb)
+end
+
+
+--запускает тест стратегии. только добавляет сигнал, а остальное сделает DoBusiness
 function funcTest()
 
-	--очистить таблицы сигналов и позиций
-	--sqlitework:executeSQL('delete from positions')
-	--sqlitework:executeSQL('delete from signals')
+	strategy:DoBisness(true)
 	
-	--[[
-	local k="'"
-	local trans_id = helper:getMiliSeconds_trans_id()
-	local sql = 'insert into transid (trans_id,signal_id,order_num,robot_id) values ('..tostring(trans_id)..','..tostring(44)..',0,'..k.. settings.robot_id ..k..')'
-	ret = db:exec(sql)			
-	if ret~=0 then
-		message('error on insert to transid. error code is '..tostring(ret))
-	end
-	--logs:add(sql)	
-	--]]
-	
-	NumCandles = getNumCandles(settings.IdPriceCombo)	
- 
-	if NumCandles==0 then
-		message('вероятно, слетели идентификаторы цены и средней скользящей!')
-		return 0
-	end
-	
-	strategy.db = db
- 
-	strategy.NumCandles=2
-	
-	--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
-	tPrice,n,s = getCandlesByIndex(settings.IdPriceCombo,0,NumCandles-3, 2)		
-	strategy:SetSeries(tPrice)
-		
-	--далее пошли запрашивать цены с графика moving averages
-	tPrice,n,s = getCandlesByIndex(settings.IdMA,0,NumCandles-3, 2)		
-	strategy.Ma1Series=tPrice	--этого поля (Ma1Series) нет в Init, оно создается здесь
+end
 
-	security:Update()		--обновляет цену последней сделки в таблице security (свойство Last,Close)
-	strategy.Position=trader:GetCurrentPosition(settings.SecCodeBox,settings.ClientBox)
-	
-	message('---')
-	
-	--добавить сигнал
-	
-	strategy:CalcLevels()
-	if strategy:findSignal('buy')  == false then
-		message('run saveSignal')
-		strategy:saveSignal('buy')
-	end	
-	--[[
-	if strategy:findSignal('sell')  == false then
-		strategy:saveSignal('sell')
-	end
-	--]]
-		
+--для отладки. проверяет функцию получения текущей позиции
+function checkPositionTest()
 
-		
-	strategy:processSignal('buy')
-	
+a = strategy:findPosition2(settings.SecCodeBox, settings.ClassCode, settings.ClientBox, settings.DepoBox, settings.robot_id)
+message(tostring(a))
 end
