@@ -1,7 +1,11 @@
 Window = class(function(acc)
 end)
 
-function Window:Init(caption, columns)
+--Parameters
+--position - table, coordinates of window x, y, dx, dy. for function SetWindowPos
+function Window:Init(caption, columns, position)
+
+
   self.hID = AllocTable()
   self.columns = {} --ENS добавим поле columns, чтобы потом можно было найти  номер колонки по имени
   local i = 1
@@ -19,7 +23,15 @@ function Window:Init(caption, columns)
   
   CreateWindow(self.hID)
   SetWindowCaption(self.hID, caption)
-  InsertRow(self.hID, 0)
+  --зачем добавлять пустую строку?
+  --InsertRow(self.hID, 0)
+  
+  if position ~= nil then
+	if position.x ~= nil and position.y ~= nil and position.dx~=nil and position.dy ~= nil then
+		SetWindowPos(self.hID, position.x, position.y, position.dx, position.dy)
+	end 
+  end
+  
 end
 
 function Window:InsertValue(id, value)

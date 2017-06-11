@@ -4,7 +4,7 @@ end)
 function Settings:Init()
 
 	--переключить по необходимости. настроено на ARQA
-	local forts  = true
+	local forts  = false
 
 	if forts ~= true then
 		self:initMICEX('11267', 'NL0011100043')
@@ -45,7 +45,7 @@ end
 function Settings:initSBER()
   self.ClassCode 			= 'QJSIM'
   self.SecCodeBox 			= 'SBER' --example for FORTS: RIM7 (RTS-6.17)
-  self.LotSizeBox 			= 2	--сколько контрактов/лотов торгует робот
+  self.LotSizeBox 			= 20	--сколько контрактов/лотов торгует робот
   self.TypeLimitCombo 		= 'T0' --FORTS T0, MICEX T2, SELT T0 for TOD, T1 for TOM
   self.IdPriceCombo 		= 'ens_ole_sber_price' 	--идентификатор графика цены
   self.IdMA 				= 'ens_ole_sber_ma'		--идентификатор графика средней скользящей

@@ -175,7 +175,7 @@ function Strategy:DoBisness(test)
 	--получить текущие значения цены и предыдущих свечей
 	self:CalcLevels()
  
-	 -- self.logstoscreen:add('DoBisness: sig_id = '..tostring(sig_id))
+	-- self.logstoscreen:add('DoBisness: sig_id = '..tostring(sig_id))
 	  
 	  --пока включен этот глобальный флаг, проверяем результаты выставления заявок и совершения сделок
 	if new_signal == true and sig_id ~= nil then
@@ -228,31 +228,7 @@ function Strategy:DoBisness(test)
 				new_signal = true
 				self.logstoscreen:add('new_signal = '..tostring(new_signal))
 		 else
-			  --закрытие свечи выше средней - покупка
-			  if self:signal_buy() == true	then 
-				
-				if self:findSignal2()  == false then
-					sig_id = self:saveSignal('buy')
-				end
-				
-				self:processSignal('buy')
-				
-				--включаем флаг, который выключим лишь после обработки сигнала
-				new_signal = true
-				self.logstoscreen:add('new_signal = '..tostring(new_signal))
-			  --закрытие часовика ниже средней - продажа
-			  elseif self:signal_sell() == true	then 
-				
-				if self:findSignal2()  == false then
-					sig_id = self:saveSignal('sell')
-				end
-				
-				self:processSignal('sell')
-				
-				--включаем флаг, который выключим лишь после обработки сигнала
-				new_signal = true
-				self.logstoscreen:add('new_signal = '..tostring(new_signal))
-			  end
+		
 		end
 		
 	end	
@@ -403,38 +379,6 @@ local sql=' insert into positions ('..
            self.db:exec(sql)  
 		   
 		  -- logs:add(sql)
-end
-
-function Strategy:signal_buy()
-  if self.Ma1 ~= 0 
-	and self.Ma1Pred  ~= 0 
-	and self.PriceSeries[0].close ~= 0
-	and self.PriceSeries[1].close ~= 0
-	and self.PriceSeries[0].close < self.Ma1Pred --предпредыдущий бар ниже средней
-	and self.PriceSeries[1].close > self.Ma1 --предыдущий бар выше средней
-	then
-	return true
-  else
-    return false
-  end
-end
-
-function Strategy:signal_sell()
-
-	--return true -- Для отладки
----[[
-  if self.Ma1 ~= 0 
-	and self.Ma1Pred  ~= 0 
-	and self.PriceSeries[0].close ~= 0
-	and self.PriceSeries[1].close ~= 0
-	and self.PriceSeries[0].close > self.Ma1Pred --предпредыдущий бар выше средней
-	and self.PriceSeries[1].close < self.Ma1 --предыдущий бар ниже средней
-	then
-	return true
-  else
-    return false
-  end
-  --]]
 end
 
 function Strategy:checkNill(value)
@@ -654,13 +598,6 @@ function Strategy:processSignal(sig_id)
 	
 	--если эти значения отличаются, то добираем позу
 	if math_abs(realPos) < LotsToPosition then
-		
-		safeCount2 = safeCount2+1
-		if safeCount2 >= 50 then
-			self.logstoscreen:add('safely break loop 2 in fn processSignal()')
-			logs:add('safely break loop 2 in fn processSignal()')
-			break
-		end
 		
 		--послать заявку
 		

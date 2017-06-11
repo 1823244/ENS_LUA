@@ -3,13 +3,16 @@ helper = {}
 local window = {}
 LogsToScreen = class(function(acc)
 end)
-function LogsToScreen:Init()
+
+--Parameters
+--position - table, coordinates of window x, y, dx, dy. for function SetWindowPos
+function LogsToScreen:Init(position)
 
   helper = Helper()
   helper:Init()
   
   window = Window()
-  window:Init('LOGS:: '..settings.TableCaption, {'Time_','Message_'})
+  window:Init('LOGS:: '..settings.TableCaption, {'Time_','Message_'}, position)
   
  
  --[[ local strTime = os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2())
