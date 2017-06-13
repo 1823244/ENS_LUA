@@ -22,7 +22,9 @@ function Settings:Init()
   
   self.robot_id = 'ENS_OLE_LUA_MA60_M1'
   
-  --message(getScriptPath())
+  self.MAPeriod = 60 --период средней скользящей для самостоятельного расчета
+    
+  self.currency_CETS = '' --для торговли валютами. сюда помещаем валюту валютной пары. так сделано, потому что позицию получаем из таблицы денег money_limits
   
   helper = Helper()
   helper:Init()

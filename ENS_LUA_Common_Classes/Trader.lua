@@ -70,12 +70,19 @@ function Trader:GetClassByCode(code)
   end
   return ""
 end
-function Trader:GetCurrentPosition(code, client)
+
+function Trader:GetCurrentPosition(code, client, currency)
   curPosition = 0
   curPosition = self:getValueFromTable2("futures_client_holding", "sec_code", code, "trdaccid", client, "totalnet")
   if curPosition == nil then
     curPosition = self:getValueFromTable2("depo_limits", "sec_code", code, "client_code", client, "currentbal")
   end
+  --ENS
+  if curPosition == nil then
+  
+    curPosition = getValueFromTable_CETS("money_limits", "sec_code", code, "client_code", client, "currentbal", currency)
+	
+  end  
   if curPosition == nil then
     curPosition = 0
   end
@@ -151,6 +158,23 @@ function Trader:getValueFromTable2(table_name, key1, value1, key2, value2, key3)
   end
   return nil
 end
+
+--ENS 13 06 17
+function getValueFromTable_CETS(table_name, key1, value1, key2, value2, key3,currency)
+  local i
+  --message('cets')
+  for i = getNumberOf(table_name)-1, 0, -1 do
+    if getItem(table_name, i) ~= nil 
+		and getItem(table_name, i)[key2] ~= nil 
+		and tostring(getItem(table_name, i)[key2]) == tostring(value2)
+		and tostring(getItem(table_name, i)['currcode']) == tostring(currency) 
+		then
+      return getItem(table_name, i)[key3]
+    end
+  end
+  return nil
+end
+
 function Trader:GetTimeFromTrade(trade)
   hour = trade.datetime.hour
   minute = trade.datetime.min
