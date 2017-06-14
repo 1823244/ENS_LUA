@@ -9,16 +9,17 @@ local bit = require"bit"
 --приватная часть - последний класс, для каждого робота свой.
 
 --common classes
-dofile ("z:\\WORK\\lua\\ENS_LUA_Common_Classes\\class.lua")
-dofile ("z:\\WORK\\lua\\ENS_LUA_Common_Classes\\Window.lua")
-dofile ("z:\\WORK\\lua\\ENS_LUA_Common_Classes\\Helper.lua")
-dofile ("z:\\WORK\\lua\\ENS_LUA_Common_Classes\\Trader.lua")
-dofile ("z:\\WORK\\lua\\ENS_LUA_Common_Classes\\Transactions.lua")
---dofile ("z:\\WORK\\lua\\ENS_LUA_Common_Classes\\Security.lua") --этот класс переопределен для данного робота
-dofile ("z:\\WORK\\lua\\ENS_LUA_Common_Classes\\logs.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Window.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Helper.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Trader.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Transactions.lua")
+--dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Security.lua") --этот класс переопределен для данного робота
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logs.lua")
 
 --common within one strategy
-dofile ("z:\\WORK\\lua\\ENS_LUA_Strategies\\StrategyOLE.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
 
 --private for each robot
 dofile (getScriptPath().."\\Classes\\SettingsGRID.lua")
@@ -108,15 +109,19 @@ function OnParam( class, sec )
     end
 	--]]
 	
-	--зачем это? для трейлинга?
-	trans:CalcDateForStop()	--формирует строку ггммдд и возвращает ее в свойстве dateForStop таблицы trans
-	
-	for row=1, #settings.secList do
-		if (tostring(sec) == settings.secList[row][1])  then
-			OnParam_one_security( row, class, sec )
+	--поиск инструмента
+	--message(tostring(GetTableSize(window.hID)))
+	for row=1, GetTableSize(window.hID) do
+		
+		local class = window:GetValueByColName(row, 'Class').image
+		--message(class)
+		local ticker = window:GetValueByColName(row, 'Ticker').image
+		--message(ticker)
+		if (tostring(sec) == ticker)  then
+			OnParam_one_security( row, class, ticker )
 		end
-    end
-
+	end
+	
 end
 
 function OnParam_one_security( row, class, sec )
@@ -127,9 +132,6 @@ function OnParam_one_security( row, class, sec )
     end
 	--]]
 	
-	--зачем это? для трейлинга?
-	trans:CalcDateForStop()	--формирует строку ггммдд и возвращает ее в свойстве dateForStop таблицы trans
-
 	time = os.date("*t")
 
 	--это зачем?
@@ -137,6 +139,8 @@ function OnParam_one_security( row, class, sec )
 
 	security:Update(class, sec)	--обновляет цену последней сделки в таблице security (свойство Last)
 
+	--message(tostring(security.last))
+	
 	window:SetValueByColName(row, 'LastPrice', tostring(security.last))
 
 	--QLUA getNumCandles
@@ -284,6 +288,98 @@ local f_cb = function( t_id,  msg,  par1, par2)
 
 end 
 
+
+function secListFutures()
+  
+  local secList = {} --таблица инструментов. 
+  --там 4 колонки:
+  --Имя инструмента, код вида фьюча, код фьюча и количество контрактов
+  
+  --код вида фьюча нужен для идентификации скользящей средней
+  
+  --раз в квартал менять код месяца
+  
+  --индексы
+  secList[1]={'RTS','RI', 'RIU7', 2} --RTS
+  secList[2]={'MICEX','MX', 'MXU7', 2} --ММВБ обычный
+  secList[3]={'MCX MINI','MM', 'MMU7', 2} --ММВБ мини
+  
+  --валюты
+  secList[4]={'SI','Si', 'SiU7',2} --USD/RUB Si
+  secList[5]={'EU','Eu', 'EuU7',2} --EUR/RUB Eu
+  secList[6]={'ED','ED', 'EDU7',2} --EUR/USD ED
+  secList[7]={'UJPY','JP', 'JPU7',2} --USD/JPY UJPY
+  secList[8]={'GBPU','GU', 'GUU7',2} --GBP/USD GBPU
+  secList[9]={'AUDU','AU', 'AUU7',2} --AUD/USD AUDU
+  secList[10]={'UCAD','CA', 'CAU7',2} --USD/CAD UCAD
+  secList[11]={'UCHF','CF', 'CFU7',2} --USD/CHF UCHF
+  secList[12]={'UTRY','TR', 'TRU7',2} --USD/TRY UTRY
+  secList[13]={'UUAH','UH', 'UHU7',2} --USD/UAH UUAH гривна
+  
+  --комоды
+  --brent надо обновлять каждый месяц
+  secList[14]={'BRENT','BR', 'BRN7',2} --brent BR-4.17
+  
+  secList[15]={'GOLD','GD', 'GDU7',2} --gold
+  secList[16]={'SILV','SV', 'SVU7',2} --silv
+  secList[17]={'PLT','PT', 'PTU7',2} --plt
+  secList[18]={'PLD','PD', 'PDU7',2} --pld
+  
+  return secList
+
+end
+
+function secListFuturesOnShares()
+  
+  local secList = {} --таблица инструментов. 
+  --там 3 колонки:
+  --код вида фьюча, код фьюча и количество контрактов
+  
+  --код вида фьюча нужен для идентификации скользящей средней
+  
+  --раз в квартал менять код месяца
+  
+  --shares futures
+  secList[1]={'SBRF','SR', 'SRU7',2} --SBRF
+  secList[2]={'GAZR','GZ', 'GZU7',2} --GAZR
+  secList[3]={'VTBR','VB', 'VBU7',2} --VTBR
+  secList[4]={'LKOH','LK', 'LKU7',2} --LKOH
+  secList[5]={'ROSN','RN', 'RNU7',2} --ROSN
+  secList[6]={'SBPR','SP', 'SPU7',2} --SBPR sber pref
+  secList[7]={'FEES','FS', 'FSU7',2} --FEES
+  secList[8]={'HYDR','HY', 'HYU7',2} --HYDR
+  secList[9]={'GMKR','GM', 'GMU7',2} --GMKR
+  secList[10]={'MGNT','MN', 'MNU7',2} --MGNT
+  secList[11]={'SNGR','SN', 'SNU7',2} --SNGR
+  secList[12]={'MOEX','ME', 'MEU7',2} --MOEX
+  secList[13]={'SNGP','SG', 'SGU7',2} --SNGP
+  secList[14]={'ALRS','AL', 'ALU7',2} --ALRS
+  secList[15]={'NLMK','NM', 'NMU7',2} --NLMK
+  secList[16]={'TATN','TT', 'TTU7',2} --TATN
+  secList[17]={'MTSI','MT', 'MTU7',2} --MTSI
+  secList[18]={'RTKM','RT', 'RTU7',2} --RTKM
+  secList[19]={'CHMF','CH', 'CHU7',2} --CHMF --северсталь
+  secList[20]={'TRNF','TN', 'TNU7',2} --TRNF
+  secList[21]={'NOTK','NK', 'NKU7',2} --NOTK --новатэк
+  secList[22]={'URKA','UK', 'UKU7',2} --URKA
+  
+  return secList
+end
+
+function secListETS()
+  
+  local secList = {} --таблица инструментов. 
+  --там 4 колонки:
+  --Имя инструмента, код вида фьюча, код инструмента и количество лотов
+  
+  secList[1]={'USD','USD', 'USD000UTSTOM', 2}
+  
+  
+  return secList
+
+end
+
+
 --главная функция робота, которая гоняется в цикле
 function main()
 
@@ -306,65 +402,121 @@ function main()
 	--'StartStop' - "кнопка", управляющая включением робота для конкретного инструмента. если робот выключен, то он все равно показывает
 	--значения последней цены, предпредыдущей и предыдущей цены и средней скользящей
 	
-	window:Init(settings.TableCaption, {'Account','Ticker', 'Lot', 'Position','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','MA60name','PriceName'})
+	window:Init(settings.TableCaption, {'Account','Depo','Name','Ticker','Class', 'Lot', 'Position','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','MA60name','PriceName'})
 	
 	
 	
-	--message(window.columns[1] )
+	--НАСТРОЙКИ ПОКА ЗАДАЮТСЯ ЗДЕСЬ!!!!
+	
+	--фьючерсы  (индексы, валюты, комоды)
+	
+	local futuresList = secListFutures() --Это двумерный массив
 	
 	--добавляем строки с инструментами в таблицу робота
-	for row=1, #settings.secList do
+	for row=1, #futuresList do
 		--DeleteRow(self.t.t_id, row)
-		local secGroup = settings.secList[row][1] --код вида фьюча, например BR для брент
-		local sec = settings.secList[row][2]
-		local lot = settings.secList[row][3]
+		local secGroup = futuresList[row][1] --код вида фьюча, например BR для брент
 		
-		window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
 		
-		window:SetValueByColName(row, 'Account', settings.ClientBox)
-		window:SetValueByColName(row, 'Ticker', sec) --код бумаги
-		window:SetValueByColName(row, 'Lot', lot) --размер лота для торговли
-		window:SetValueByColName(row, 'StartStop', 'Start')
-		window:SetValueByColName(row, 'BuyMarket', 'Buy')
-		window:SetValueByColName(row, 'SellMarket', 'Sell')
+		window:SetValueByColName(rowNum, 'Account', '41105E5')
+		window:SetValueByColName(rowNum, 'Depo', '41105E5')
+		window:SetValueByColName(rowNum, 'Name', futuresList[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', futuresList[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Class', 'SPBFUT') --класс бумаги
+		window:SetValueByColName(rowNum, 'Lot', futuresList[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'StartStop', 'Start')
+		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
+		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
 		
-		window:SetValueByColName(row, 'MA60name', secGroup ..'_grid_MA60')
-		window:SetValueByColName(row, 'PriceName', secGroup..'_grid_price')
+		window:SetValueByColName(rowNum, 'MA60name', secGroup ..'_grid_MA60')--это уже не надо, т.к. я научился вычислять среднюю скользящую сам
+		window:SetValueByColName(rowNum, 'PriceName', secGroup..'_grid_price')
 		
 		--чтобы получить номер колонки используем функцию GetColNumberByName()
-		Green(window.hID, row, window:GetColNumberByName('StartStop')) 
-		Green(window.hID, row, window:GetColNumberByName('BuyMarket')) 
-		Red(window.hID, row, window:GetColNumberByName('SellMarket')) 
+		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
+		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
+		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
 	end  
 
+	--фьючерсы на акции
+	
+	futuresList = secListFuturesOnShares() --Это двумерный массив
+	
+	--добавляем строки с инструментами в таблицу робота
+	for row=1, #futuresList do
+		--DeleteRow(self.t.t_id, row)
+		local secGroup = futuresList[row][1] --код вида фьюча, например BR для брент
+		
+		rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		
+		window:SetValueByColName(rowNum, 'Account', '41105E5')
+		window:SetValueByColName(rowNum, 'Depo', '41105E5')
+		window:SetValueByColName(rowNum, 'Name', futuresList[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', futuresList[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Class', 'SPBFUT') --класс бумаги
+		window:SetValueByColName(rowNum, 'Lot', futuresList[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'StartStop', 'Start')
+		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
+		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
+		
+		window:SetValueByColName(rowNum, 'MA60name', secGroup ..'_grid_MA60')--это уже не надо, т.к. я научился вычислять среднюю скользящую сам
+		window:SetValueByColName(rowNum, 'PriceName', secGroup..'_grid_price')
+		
+		--чтобы получить номер колонки используем функцию GetColNumberByName()
+		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
+		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
+		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
+	end  
 
-	--QLUA SetTableNotificationCallback
-	--Задание функции обратного вызова для обработки событий в таблице. 
-	--Формат вызова: 
-	--NUMBER SetTableNotificationCallback (NUMBER t_id, FUNCTION f_cb)
-	--Параметры: 
-	--t_id – идентификатор таблицы, 
-	--f_cb – функция обратного вызова для обработки событий в таблице.
-	--В случае успешного завершения функция возвращает «1», иначе – «0». 
-	--Формат вызова функции обратного вызова для обработки событий в таблице: 
-	--f_cb = FUNCTION (NUMBER t_id, NUMBER msg, NUMBER par1, NUMBER par2)
-	--Параметры: 
-	--t_id – идентификатор таблицы, для которой обрабатывается сообщение, 
-	--par1 и par2 – значения параметров определяются типом сообщения msg, 
-	--msg – код сообщения.
+	--валюты
+
+	local ETSList = secListETS() --Это двумерный массив
+	
+	--добавляем строки с инструментами в таблицу робота
+	for row=1, #ETSList do
+		--DeleteRow(self.t.t_id, row)
+		local secGroup = ETSList[row][1] --код вида фьюча, например BR для брент
+		
+		rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		
+		window:SetValueByColName(rowNum, 'Account', '41105E5')
+		window:SetValueByColName(rowNum, 'Depo', '41105E5')
+		window:SetValueByColName(rowNum, 'Name', ETSList[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', ETSList[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Class', 'CETS') --класс бумаги
+		window:SetValueByColName(rowNum, 'Lot', ETSList[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'StartStop', 'Start')
+		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
+		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
+		
+		window:SetValueByColName(rowNum, 'MA60name', secGroup ..'_grid_MA60')--это уже не надо, т.к. я научился вычислять среднюю скользящую сам
+		window:SetValueByColName(rowNum, 'PriceName', secGroup..'_grid_price')
+		
+		--чтобы получить номер колонки используем функцию GetColNumberByName()
+		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
+		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
+		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
+	end  
+	
+	
+	
+	
 	
 	SetTableNotificationCallback (window.hID, f_cb)
 
 	--при запуске один раз выполним OnParam, чтобы заполнить последние значения
 	
-	for row=1, #settings.secList do
+	for row=1, GetTableSize(window.hID) do
 		--message(settings.secList[row][1])
-		OnParam( settings.ClassCode, settings.secList[row][1] )
+		local class = window:GetValueByColName(row, 'Class').image
+		local ticker = window:GetValueByColName(row, 'Ticker').image
+		--message(tostring(ticker))
+		OnParam( class, ticker )
 	end
 	
 	--задержка 100 миллисекунд между итерациями 
 	while is_run do
-		sleep(50)
+		sleep(5000)
 	end
 	
 
