@@ -1,12 +1,10 @@
---это шаблон главного файла робота
+--инструкци€ по настройке
+--создать функцию, котора€ возвращает массив инструментов, образец - secListFutures()
+--добавить инструменты в таблицу в функции main, см. по образцу
+--создать графики цены всех новых инструментов. идентификатор графика формируетс€ на основании тикера, см. образец
+--готово.
 
 local bit = require"bit"
-
---путь к классам нужно заменить на актуальный, вот эту часть
---"c:\\WORK\\lua\\ENS_LUA_Common_Classes"
---"c:\\WORK\\lua\\ENS_LUA_Strategies"
-
---приватна€ часть - последний класс, дл€ каждого робота свой.
 
 --common classes
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
@@ -57,9 +55,6 @@ function OnInit(path)
 	strategy:Init()
 	transactions=Transactions()
 	transactions:Init(settings.ClientBox,settings.DepoBox, settings.SecCodeBox,settings.ClassCode)
-
-	
-	
 end
 
 --это не обработчик событи€, а просто функци€ покупки
@@ -93,8 +88,8 @@ end
 
 function OnStop(s)
 
-	window:Close()
 	is_run = false
+	window:Close()
 	
 end 
 
@@ -126,8 +121,8 @@ end
 
 function OnParam_one_security( row, class, sec )
 
-	--[[
-    if is_run == false or working==false then
+	--[[ 
+	if is_run == false or working==false then
         return
     end
 	--]]
@@ -157,27 +152,6 @@ function OnParam_one_security( row, class, sec )
 		return
 	end
  
-	strategy.NumCandles=2
-
-	--QLUA getCandlesByIndex
-	--‘ункци€ предназначена дл€ получени€ информации о свечках по идентификатору 
-	--(заказ данных дл€ построени€ графика плагин не осуществл€ет, поэтому дл€ успешного доступа нужный график должен быть открыт). 
-	--‘ормат вызова: 
-	--TABLE t, NUMBER n, STRING l getCandlesByIndex (STRING tag, NUMBER line, NUMBER first_candle, NUMBER count) 
-	--ѕараметры: 
-	--tag Ц строковый идентификатор графика или индикатора, 
-	--line Ц номер линии графика или индикатора. ѕерва€ лини€ имеет номер 0, 
-	--first_candle Ц индекс первой свечки. ѕерва€ (сама€ лева€) свечка имеет индекс 0, 
-	--count Ц количество запрашиваемых свечек.
-	--¬озвращаемые значени€: 
-	--t Ц таблица, содержаща€ запрашиваемые свечки, 
-	--n Ц количество свечек в таблице t , 
-	--l Ц легенда (подпись) графика.
-
-	--[1]функци€ getCandlesByIndex требует указывать, с какой по счету свечи мы получаем данные, 
-	--а счет начинаетс€ с самой левой свечки. ќна имеет номер 0, а сама€ права, текуща€, 
-	--соответственно N-1 Ц на единицу меньше количества свечек.
-	
 	--—””_≈Ќ— тут запрашиваем 2 предпоследних свечи. последн€€ не нужна, т.к. она еще не сформирована
 	tPrice,n,s = getCandlesByIndex(IdPrice, 0, NumCandles-3, 2)		
 	strategy:SetSeries(tPrice)
