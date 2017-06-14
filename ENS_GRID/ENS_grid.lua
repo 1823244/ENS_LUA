@@ -113,12 +113,12 @@ function OnParam( class, sec )
 	--message(tostring(GetTableSize(window.hID)))
 	for row=1, GetTableSize(window.hID) do
 		
-		local class = window:GetValueByColName(row, 'Class').image
+		local class_code = window:GetValueByColName(row, 'Class').image
 		--message(class)
 		local ticker = window:GetValueByColName(row, 'Ticker').image
 		--message(ticker)
-		if (tostring(sec) == ticker)  then
-			OnParam_one_security( row, class, ticker )
+		if sec == ticker and  class == class_code  then
+			OnParam_one_security( row, class, sec )
 		end
 	end
 	
@@ -133,9 +133,6 @@ function OnParam_one_security( row, class, sec )
 	--]]
 	
 	time = os.date("*t")
-
-	--это зачем?
-	strategy.Second=time.sec	--секунда
 
 	security:Update(class, sec)	--обновляет цену последней сделки в таблице security (свойство Last)
 
@@ -156,70 +153,71 @@ function OnParam_one_security( row, class, sec )
 	
 	local NumCandles = getNumCandles(IdPrice)	--это общее количество свечей на графике цены. нам нужны 2 - предпредпоследняя и предпоследняя. последняя не нужна, это текущая, еще не закрытая свеча
  
-	if NumCandles~=0 then
- 
-		strategy.NumCandles=2
-  
-		--QLUA getCandlesByIndex
-		--Функция предназначена для получения информации о свечках по идентификатору 
-		--(заказ данных для построения графика плагин не осуществляет, поэтому для успешного доступа нужный график должен быть открыт). 
-		--Формат вызова: 
-		--TABLE t, NUMBER n, STRING l getCandlesByIndex (STRING tag, NUMBER line, NUMBER first_candle, NUMBER count) 
-		--Параметры: 
-		--tag – строковый идентификатор графика или индикатора, 
-		--line – номер линии графика или индикатора. Первая линия имеет номер 0, 
-		--first_candle – индекс первой свечки. Первая (самая левая) свечка имеет индекс 0, 
-		--count – количество запрашиваемых свечек.
-		--Возвращаемые значения: 
-		--t – таблица, содержащая запрашиваемые свечки, 
-		--n – количество свечек в таблице t , 
-		--l – легенда (подпись) графика.
-  
-		--[1]функция getCandlesByIndex требует указывать, с какой по счету свечи мы получаем данные, 
-		--а счет начинается с самой левой свечки. Она имеет номер 0, а самая права, текущая, 
-		--соответственно N-1 – на единицу меньше количества свечек.
-		
-		--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
-		tPrice,n,s = getCandlesByIndex(IdPrice, 0, NumCandles-3, 2)		
-		strategy:SetSeries(tPrice)
-
-		IdMA60 = window:GetValueByColName(row, 'MA60name').image  --идентификатор графика средней скользящей
-		
-		--далее пошли запрашивать цены с графиков moving averages
-		tPrice,n,s = getCandlesByIndex(IdMA60, 0, NumCandles-3, 2)		
-		strategy.Ma1Series=tPrice
-
-		security:Update(class, sec)		--обновляет цену последней сделки в таблице security (свойство Last)
-		strategy.Position=trader:GetCurrentPosition(sec, settings.ClientBox)
-		
-		strategy.secCode = sec --ENS для отладки
-		
-		strategy.LotToTrade=tonumber(window:GetValueByColName(row, 'Lot').image)
-		
-		--[[
-		if working==true  then
-			strategy:DoBisness()
-		else
-			--ENS только показываем значения скользящих
-			strategy:CalcLevels()
-		end
-		--]]
-		--for debug. потом это убрать и включить условие, которео выше
-		strategy:CalcLevels()
-		--функция DoBisness() может отправить заявку на сервер, она отработает и изменится позиция. обновим ее
-		strategy.PredPosition=strategy.Position
-		
-		--обновляем данные в визуальной таблице робота
-		window:SetValueByColName(row, 'MA60Pred', strategy.Ma1Pred)
-		window:SetValueByColName(row, 'MA60', strategy.Ma1)
-		
-		window:SetValueByColName(row, 'PricePred', strategy.PriceSeries[0].close)
-		window:SetValueByColName(row, 'Price', strategy.PriceSeries[1].close)
-		
-		window:SetValueByColName(row, 'LastPrice', tostring(security.last))
-
-
+	if NumCandles==0 then
+		return
 	end
+ 
+	strategy.NumCandles=2
+
+	--QLUA getCandlesByIndex
+	--Функция предназначена для получения информации о свечках по идентификатору 
+	--(заказ данных для построения графика плагин не осуществляет, поэтому для успешного доступа нужный график должен быть открыт). 
+	--Формат вызова: 
+	--TABLE t, NUMBER n, STRING l getCandlesByIndex (STRING tag, NUMBER line, NUMBER first_candle, NUMBER count) 
+	--Параметры: 
+	--tag – строковый идентификатор графика или индикатора, 
+	--line – номер линии графика или индикатора. Первая линия имеет номер 0, 
+	--first_candle – индекс первой свечки. Первая (самая левая) свечка имеет индекс 0, 
+	--count – количество запрашиваемых свечек.
+	--Возвращаемые значения: 
+	--t – таблица, содержащая запрашиваемые свечки, 
+	--n – количество свечек в таблице t , 
+	--l – легенда (подпись) графика.
+
+	--[1]функция getCandlesByIndex требует указывать, с какой по счету свечи мы получаем данные, 
+	--а счет начинается с самой левой свечки. Она имеет номер 0, а самая права, текущая, 
+	--соответственно N-1 – на единицу меньше количества свечек.
+	
+	--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
+	tPrice,n,s = getCandlesByIndex(IdPrice, 0, NumCandles-3, 2)		
+	strategy:SetSeries(tPrice)
+
+	IdMA60 = window:GetValueByColName(row, 'MA60name').image  --идентификатор графика средней скользящей
+	
+	--далее пошли запрашивать цены с графиков moving averages
+	tPrice,n,s = getCandlesByIndex(IdMA60, 0, NumCandles-3, 2)		
+	strategy.Ma1Series=tPrice
+
+	strategy.Position=trader:GetCurrentPosition(sec, settings.ClientBox)
+	
+	strategy.secCode = sec --ENS для отладки
+	
+	strategy.LotToTrade=tonumber(window:GetValueByColName(row, 'Lot').image)
+	
+	--[[
+	if working==true  then
+		strategy:DoBisness()
+	else
+		--ENS только показываем значения скользящих
+		strategy:CalcLevels()
+	end
+	--]]
+	--for debug. потом это убрать и включить условие, которео выше
+	strategy:CalcLevels()
+	--функция DoBisness() может отправить заявку на сервер, она отработает и изменится позиция. обновим ее
+	strategy.PredPosition=strategy.Position
+	
+	--обновляем данные в визуальной таблице робота
+	window:SetValueByColName(row, 'MA60Pred', strategy.Ma1Pred)
+	window:SetValueByColName(row, 'MA60', strategy.Ma1)
+	
+	window:SetValueByColName(row, 'PricePred', strategy.PriceSeries[0].close)
+	window:SetValueByColName(row, 'Price', strategy.PriceSeries[1].close)
+	
+	window:SetValueByColName(row, 'LastPrice', tostring(security.last))
+
+
+
 
 	
 	
@@ -402,7 +400,7 @@ function main()
 	--'StartStop' - "кнопка", управляющая включением робота для конкретного инструмента. если робот выключен, то он все равно показывает
 	--значения последней цены, предпредыдущей и предыдущей цены и средней скользящей
 	
-	window:Init(settings.TableCaption, {'Account','Depo','Name','Ticker','Class', 'Lot', 'Position','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','MA60name','PriceName'})
+	window:Init(settings.TableCaption, {'Account','Depo','Name','Ticker','Class', 'Lot', 'Position','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name'})
 	
 	
 	
