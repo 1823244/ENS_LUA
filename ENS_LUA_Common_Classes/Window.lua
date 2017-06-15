@@ -121,12 +121,17 @@ function Window:IfExists(id)
   return false
 end
 
---моя функция. добавляет строку в таблицу робота
+--добавляет строку в таблицу робота
 function Window:AddRow(row, color)
-  
-  newRow = InsertRow(self.hID, -1)
+  --не надо переписывать эту функцию
   rows, columns = GetTableSize(self.hID)
-  
+  InsertRow(self.hID, rows)
+  i = 1
+  for key, value in pairs(row) do
+  --message(value)
+    SetCell(self.hID, rows, i, tostring(value))
+    i = i + 1
+  end
   if color == "Grey" then
     SetColor(self.hID, rows, QTABLE_NO_INDEX, RGB(220, 220, 220), QTABLE_NO_INDEX, QTABLE_NO_INDEX, QTABLE_NO_INDEX)
   end
@@ -137,8 +142,7 @@ function Window:AddRow(row, color)
   if color == "Red" then
     --SetColor(self.hID, rows, QTABLE_NO_INDEX, RGB(255, 0, 0), QTABLE_NO_INDEX, QTABLE_NO_INDEX, QTABLE_NO_INDEX)
 	SetColor(self.hID, rows, QTABLE_NO_INDEX, RGB(255, 230, 230), QTABLE_NO_INDEX, QTABLE_NO_INDEX, QTABLE_NO_INDEX)
-  end
-  return newRow
+  end  
 end
 
 function Window:Close()

@@ -132,8 +132,6 @@ function OnStart()
 	settings:Load(trader.Path)
 	strategy.LotToTrade=tonumber(settings.LotSizeBox)
 
-	--прочитаем значения, не дожидаясь изменения параметров инструмента
-	OnParam( settings.ClassCode, settings.SecCodeBox )
 	
 	--[[
 	
@@ -223,8 +221,13 @@ function OnTrade(trade)
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trade.trans_id) 
 			and tostring(orders:GetValue(i, 'order').image) == tostring(trade.order_num) then
 			orders:SetValue(i, 'trade', trade.trade_num)
-			local qty_fact = tonumber(orders:GetValue(i, 'qty_fact').image)
-			orders:SetValue(i, 'qty_fact', qty_fact + trade.qty)
+			local qty_fact = orders:GetValue(i, 'qty_fact').image
+			if qty_fact == nil or qty_fact == '' then
+				qty_fact = 0
+			else
+				qty_fact = tonumber(qty_fact)
+			end
+			orders:SetValue(i, 'qty_fact', qty_fact + tonumber(trade.qty))
 			--logstoscreen:add('OnTrade - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
 			break
 		end
@@ -591,13 +594,13 @@ function processSignal()
 		
 	elseif settings.rejim == 'long' then
 		--нельзя в шорт. длинную позицию продаем в ноль
-		if signal_direction == 'sell' and factQuantity>0 then
+		if signal_direction == 'sell' and factQuantity>=0 then
 			planQuantity = 0
 		end
 		
 	elseif settings.rejim == 'short' then
 		--нельзя в лонг. короткую позицию откупаем в ноль
-		if signal_direction == 'buy' and factQuantity<0 then
+		if signal_direction == 'buy' and factQuantity<=0 then
 			planQuantity = 0
 		end
 	end
@@ -685,7 +688,14 @@ function wait_for_response()
 				--хотя для объемов в 10 лотов наверное любой фьючерс будет ликвидным...
 				
 				--пока не будут завязываться на это. просто выведу в лог
-				if tonumber(orders:GetValue(i, 'qty').image) == tonumber(orders:GetValue(i, 'qty_fact').image) then
+				local qty_fact = orders:GetValue(i, 'qty_fact').image
+				if qty_fact == nil or qty_fact == '' then
+					qty_fact = 0
+				else
+					qty_fact = tonumber(qty_fact)
+				end
+			
+				if tonumber(orders:GetValue(i, 'qty').image) == qty_fact then
 					
 					logstoscreen:add('order '..orders:GetValue(i, 'order').image..': qty = qty_fact - order is processed')
 					

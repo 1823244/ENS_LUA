@@ -389,7 +389,8 @@ function main()
 		--DeleteRow(self.t.t_id, row)
 		local secGroup = futuresList[row][1] --код вида фьюча, например BR для брент
 		
-		rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		--rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		rowNum = InsertRow(window.hID, -1)
 		
 		window:SetValueByColName(rowNum, 'Account', '41105E5')
 		window:SetValueByColName(rowNum, 'Depo', '41105E5')
@@ -419,7 +420,8 @@ function main()
 		--DeleteRow(self.t.t_id, row)
 		local secGroup = futuresList[row][1] --код вида фьюча, например BR для брент
 		
-		rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		--rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		rowNum = InsertRow(window.hID, -1)
 		
 		window:SetValueByColName(rowNum, 'Account', '41105E5')
 		window:SetValueByColName(rowNum, 'Depo', '41105E5')
@@ -449,7 +451,8 @@ function main()
 		--DeleteRow(self.t.t_id, row)
 		local secGroup = ETSList[row][1] --код вида фьюча, например BR для брент
 		
-		rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		--rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		rowNum = InsertRow(window.hID, -1)
 		
 		window:SetValueByColName(rowNum, 'Account', '41105E5')
 		window:SetValueByColName(rowNum, 'Depo', '41105E5')
@@ -479,11 +482,7 @@ function main()
 	--при запуске один раз выполним OnParam, чтобы заполнить последние значения
 	
 	for row=1, GetTableSize(window.hID) do
-		--message(settings.secList[row][1])
-		local class = window:GetValueByColName(row, 'Class').image
-		local ticker = window:GetValueByColName(row, 'Ticker').image
-		--message(tostring(ticker))
-		OnParam( class, ticker )
+		OnParam( window:GetValueByColName(row, 'Class').image, window:GetValueByColName(row, 'Ticker').image )
 	end
 	
 	--задержка 100 миллисекунд между итерациями 
