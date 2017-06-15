@@ -1008,10 +1008,4 @@ if idp and num then
 else return num end
 end
 
---ENS моя функция возведения в степень. умножение работает быстрее, чем ^
-function degree(num, pos)
-	for i = 1, pos do
-		num=num*num
-	end
-	return num
-end
+

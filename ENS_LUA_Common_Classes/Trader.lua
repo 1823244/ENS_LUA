@@ -71,22 +71,19 @@ function Trader:GetClassByCode(code)
   return ""
 end
 
-function Trader:GetCurrentPosition(code, client, currency)
-  curPosition = 0
-  curPosition = self:getValueFromTable2("futures_client_holding", "sec_code", code, "trdaccid", client, "totalnet")
-  if curPosition == nil then
-    curPosition = self:getValueFromTable2("depo_limits", "sec_code", code, "client_code", client, "currentbal")
-  end
-  --ENS
-  if curPosition == nil then
-  
-    curPosition = getValueFromTable_CETS("money_limits", "sec_code", code, "client_code", client, "currentbal", currency)
-	
-  end  
-  if curPosition == nil then
-    curPosition = 0
-  end
-  return curPosition
+function Trader:GetCurrentPosition(code, client, class, currency)
+	curPosition = 0
+	if class == 'SPBFUT' or class == 'SPBOPT' then
+		curPosition = self:getValueFromTable2("futures_client_holding", "sec_code", code, "trdaccid", client, "totalnet")
+	elseif class == 'CETS' then
+		curPosition = getValueFromTable_CETS("money_limits", "sec_code", code, "client_code", client, "currentbal", currency)
+	else
+		curPosition = self:getValueFromTable2("depo_limits", "sec_code", code, "client_code", client, "currentbal")
+	end
+	if curPosition == nil then
+		curPosition = 0
+	end
+	return curPosition
 end
 function Trader:GetMoneyAmount(client)
   firmId = self:GetFirm(client)

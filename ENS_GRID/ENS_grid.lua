@@ -4,7 +4,13 @@
 --создать графики цены всех новых инструментов. идентификатор графика формируется на основании тикера, см. образец
 --готово.
 
+--инструкция по программированию
+--установка значения в ячейке таблицы
+--window:SetValueByColName(row, 'LastPrice', tostring(security.last))
+
 local bit = require"bit"
+local math_ceil = math.ceil
+local math_floor = math.floor
 
 --common classes
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
@@ -35,9 +41,16 @@ window={}
 
 logs={}
 
-is_run = true	--флаг работы скрипта, пока истина - скрипт работает
+local is_run = true	--флаг работы скрипта, пока истина - скрипт работает
 
-working = false	--флаг активности. чтобы не закрывая окно можно быть включить/выключить робота
+--local working = false	--флаг активности. чтобы не закрывая окно можно быть включить/выключить робота
+
+--расчет средней 
+local lastCandle = nil
+local EMA_TMP = {}
+
+test_signal_buy = false
+test_signal_sell = false
 
 function OnInit(path)
 	trader = Trader()
@@ -58,17 +71,41 @@ function OnInit(path)
 end
 
 --это не обработчик события, а просто функция покупки
-function OnBuy()
-    if working  then
-      trans:order(settings.SecCodeBox,settings.ClassCode,"B",settings.ClientBox,settings.DepoBox,tostring(security.last+100*security.minStepPrice),settings.LotSizeBox)
-	end 
+function Buy(row)
+    
+	local SecCodeBox = window:GetValueByColName(row, 'Ticker').image
+	local ClassCode = window:GetValueByColName(row, 'Class').image
+	local ClientBox = window:GetValueByColName(row, 'Account').image
+	local DepoBox = window:GetValueByColName(row, 'Depo').image
+	local LotSizeBox = window:GetValueByColName(row, 'Lot').image
+	
+	security.class = ClassCode
+	security.code = SecCodeBox
+	security:Update()
+	
+	--message(security.code)
+	local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)
+    trans:order(SecCodeBox, ClassCode,"B", ClientBox, DepoBox,tostring(security.last+100*minStepPrice),LotSizeBox)
+	
 end
 
 --это не обработчик события, а просто функция продажи
-function OnSell()
-	if working then
-		trans:order(settings.SecCodeBox,settings.ClassCode,"S",settings.ClientBox,settings.DepoBox,tostring(security.last-100*security.minStepPrice),settings.LotSizeBox)
-	end
+function Sell(row)
+	
+	local SecCodeBox = window:GetValueByColName(row, 'Ticker').image
+	local ClassCode = window:GetValueByColName(row, 'Class').image
+	local ClientBox = window:GetValueByColName(row, 'Account').image
+	local DepoBox = window:GetValueByColName(row, 'Depo').image
+	local LotSizeBox = window:GetValueByColName(row, 'Lot').image
+	
+	security.class = ClassCode
+	security.code = SecCodeBox
+	security:Update()
+	
+	--message(security.code)
+	local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)	
+	trans:order(SecCodeBox,ClassCode,"S",ClientBox,DepoBox,tostring(security.last-100*security.minStepPrice),LotSizeBox)
+	
 end
 
 --это не метод квика, а просто функцию так назвали!
@@ -99,37 +136,23 @@ end
 function OnParam( class, sec )
 
 	--[[
-	if is_run == false or working==false then
-        return
-    end
-	--]]
-	
 	--поиск инструмента
 	--message(tostring(GetTableSize(window.hID)))
 	for row=1, GetTableSize(window.hID) do
-		
-		local class_code = window:GetValueByColName(row, 'Class').image
-		--message(class)
-		local ticker = window:GetValueByColName(row, 'Ticker').image
-		--message(ticker)
-		if sec == ticker and  class == class_code  then
+		if sec == window:GetValueByColName(row, 'Ticker').image and  class == window:GetValueByColName(row, 'Class').image  then
 			OnParam_one_security( row, class, sec )
+			break
 		end
 	end
+	--]]
 	
 end
 
 function OnParam_one_security( row, class, sec )
 
-	--[[ 
-	if is_run == false or working==false then
-        return
-    end
-	--]]
-	
-	time = os.date("*t")
-
-	security:Update(class, sec)	--обновляет цену последней сделки в таблице security (свойство Last)
+	security.class=class
+	security.code=sec
+	security:Update()	--обновляет цену последней сделки в таблице security (свойство Last)
 
 	--message(tostring(security.last))
 	
@@ -156,44 +179,23 @@ function OnParam_one_security( row, class, sec )
 	tPrice,n,s = getCandlesByIndex(IdPrice, 0, NumCandles-3, 2)		
 	strategy:SetSeries(tPrice)
 
-	IdMA60 = window:GetValueByColName(row, 'MA60name').image  --идентификатор графика средней скользящей
-	
+	--IdMA60 = window:GetValueByColName(row, 'MA60name').image  --идентификатор графика средней скользящей
+	EMA(60, IdPrice)
 	--далее пошли запрашивать цены с графиков moving averages
-	tPrice,n,s = getCandlesByIndex(IdMA60, 0, NumCandles-3, 2)		
-	strategy.Ma1Series=tPrice
+	--tPrice,n,s = getCandlesByIndex(IdMA60, 0, NumCandles-3, 2)		
+	--strategy.Ma1Series=tPrice
 
-	strategy.Position=trader:GetCurrentPosition(sec, settings.ClientBox)
+	--strategy.Position=trader:GetCurrentPosition(sec, settings.ClientBox)
 	
-	strategy.secCode = sec --ENS для отладки
+	--strategy.secCode = sec --ENS для отладки
 	
 	strategy.LotToTrade=tonumber(window:GetValueByColName(row, 'Lot').image)
 	
-	--[[
-	if working==true  then
-		strategy:DoBisness()
-	else
-		--ENS только показываем значения скользящих
-		strategy:CalcLevels()
-	end
-	--]]
-	--for debug. потом это убрать и включить условие, которео выше
-	strategy:CalcLevels()
-	--функция DoBisness() может отправить заявку на сервер, она отработает и изменится позиция. обновим ее
-	strategy.PredPosition=strategy.Position
-	
-	--обновляем данные в визуальной таблице робота
-	window:SetValueByColName(row, 'MA60Pred', strategy.Ma1Pred)
-	window:SetValueByColName(row, 'MA60', strategy.Ma1)
 	
 	window:SetValueByColName(row, 'PricePred', strategy.PriceSeries[0].close)
 	window:SetValueByColName(row, 'Price', strategy.PriceSeries[1].close)
 	
 	window:SetValueByColName(row, 'LastPrice', tostring(security.last))
-
-
-
-
-	
 	
 end
 
@@ -237,7 +239,12 @@ local f_cb = function( t_id,  msg,  par1, par2)
 				SetCell(window.hID, par1, par2, 'Start')
 				working = false
 			end
-			
+		elseif (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('BuyMarket') then
+			--message('buy')
+			Buy(par1)
+		elseif (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('SellMarket') then
+			--message('buy')
+			Sell(par1)
 		end
 	end
 
@@ -351,6 +358,19 @@ function secListETS()
 
 end
 
+function secListSPOT()
+  
+  local secList = {} --таблица инструментов. 
+  --там 4 колонки:
+  --Имя инструмента, код вида фьюча, код инструмента и количество лотов
+  
+  secList[1]={'GAZPROM','GAZP', 'GAZP', 2}
+  
+  
+  return secList
+
+end
+
 
 --главная функция робота, которая гоняется в цикле
 function main()
@@ -374,7 +394,7 @@ function main()
 	--'StartStop' - "кнопка", управляющая включением робота для конкретного инструмента. если робот выключен, то он все равно показывает
 	--значения последней цены, предпредыдущей и предыдущей цены и средней скользящей
 	
-	window:Init(settings.TableCaption, {'Account','Depo','Name','Ticker','Class', 'Lot', 'Position','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name'})
+	window:Init(settings.TableCaption, {'Account','Depo','Name','Ticker','Class', 'Lot', 'Position','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice'})
 	
 	
 	
@@ -382,22 +402,22 @@ function main()
 	
 	--фьючерсы  (индексы, валюты, комоды)
 	
-	local futuresList = secListFutures() --Это двумерный массив
+	local List = secListFutures() --Это двумерный массив
 	
 	--добавляем строки с инструментами в таблицу робота
-	for row=1, #futuresList do
+	for row=1, #List do
 		--DeleteRow(self.t.t_id, row)
-		local secGroup = futuresList[row][1] --код вида фьюча, например BR для брент
+		local secGroup = List[row][1] --код вида фьюча, например BR для брент
 		
 		--rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
 		rowNum = InsertRow(window.hID, -1)
 		
 		window:SetValueByColName(rowNum, 'Account', '41105E5')
 		window:SetValueByColName(rowNum, 'Depo', '41105E5')
-		window:SetValueByColName(rowNum, 'Name', futuresList[row][1]) 
-		window:SetValueByColName(rowNum, 'Ticker', futuresList[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Name', List[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', List[row][3]) --код бумаги
 		window:SetValueByColName(rowNum, 'Class', 'SPBFUT') --класс бумаги
-		window:SetValueByColName(rowNum, 'Lot', futuresList[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'Lot', List[row][4]) --размер лота для торговли
 		window:SetValueByColName(rowNum, 'StartStop', 'Start')
 		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
 		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
@@ -409,26 +429,33 @@ function main()
 		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
 		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
 		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
+		
+		local minStepPrice = getParamEx('SPBFUT', List[row][3], "SEC_PRICE_STEP").param_value + 0
+		window:SetValueByColName(rowNum, 'minStepPrice', tostring(minStepPrice))
+		--self.STEPPRICET = getParamEx(self.class, self.code, "STEPPRICET").param_value + 0
+		if minStepPrice == nil or tonumber(minStepPrice) == 0 then
+			--message("Для инструмента "..List[row][3].." нет минимального шага цены в Квике. Добавьте его в таблицу инструментов", 2)
+		end		
 	end  
 
 	--фьючерсы на акции
 	
-	futuresList = secListFuturesOnShares() --Это двумерный массив
+	List = secListFuturesOnShares() --Это двумерный массив
 	
 	--добавляем строки с инструментами в таблицу робота
-	for row=1, #futuresList do
+	for row=1, #List do
 		--DeleteRow(self.t.t_id, row)
-		local secGroup = futuresList[row][1] --код вида фьюча, например BR для брент
+		local secGroup = List[row][1] --код вида фьюча, например BR для брент
 		
 		--rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
 		rowNum = InsertRow(window.hID, -1)
 		
 		window:SetValueByColName(rowNum, 'Account', '41105E5')
 		window:SetValueByColName(rowNum, 'Depo', '41105E5')
-		window:SetValueByColName(rowNum, 'Name', futuresList[row][1]) 
-		window:SetValueByColName(rowNum, 'Ticker', futuresList[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Name', List[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', List[row][3]) --код бумаги
 		window:SetValueByColName(rowNum, 'Class', 'SPBFUT') --класс бумаги
-		window:SetValueByColName(rowNum, 'Lot', futuresList[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'Lot', List[row][4]) --размер лота для торговли
 		window:SetValueByColName(rowNum, 'StartStop', 'Start')
 		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
 		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
@@ -440,26 +467,34 @@ function main()
 		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
 		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
 		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
+		
+		local minStepPrice = getParamEx('SPBFUT', List[row][3], "SEC_PRICE_STEP").param_value + 0
+		window:SetValueByColName(rowNum, 'minStepPrice', tostring(minStepPrice))
+		--self.STEPPRICET = getParamEx(self.class, self.code, "STEPPRICET").param_value + 0
+		if minStepPrice == nil or tonumber(minStepPrice) == 0 then
+			--message("Для инструмента "..List[row][3].." нет минимального шага цены в Квике. Добавьте его в таблицу инструментов", 2)
+		end		
+		
 	end  
 
 	--валюты
 
-	local ETSList = secListETS() --Это двумерный массив
+	local List = secListETS() --Это двумерный массив
 	
 	--добавляем строки с инструментами в таблицу робота
-	for row=1, #ETSList do
+	for row=1, #List do
 		--DeleteRow(self.t.t_id, row)
-		local secGroup = ETSList[row][1] --код вида фьюча, например BR для брент
+		local secGroup = List[row][1] --код вида фьюча, например BR для брент
 		
 		--rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
 		rowNum = InsertRow(window.hID, -1)
 		
-		window:SetValueByColName(rowNum, 'Account', '41105E5')
-		window:SetValueByColName(rowNum, 'Depo', '41105E5')
-		window:SetValueByColName(rowNum, 'Name', ETSList[row][1]) 
-		window:SetValueByColName(rowNum, 'Ticker', ETSList[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Account', '11267')
+		window:SetValueByColName(rowNum, 'Depo', 'MB1000100002')
+		window:SetValueByColName(rowNum, 'Name', List[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', List[row][3]) --код бумаги
 		window:SetValueByColName(rowNum, 'Class', 'CETS') --класс бумаги
-		window:SetValueByColName(rowNum, 'Lot', ETSList[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'Lot', List[row][4]) --размер лота для торговли
 		window:SetValueByColName(rowNum, 'StartStop', 'Start')
 		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
 		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
@@ -471,6 +506,53 @@ function main()
 		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
 		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
 		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
+		
+		local minStepPrice = getParamEx('CETS', List[row][3], "SEC_PRICE_STEP").param_value + 0
+		window:SetValueByColName(rowNum, 'minStepPrice', tostring(minStepPrice))
+		--self.STEPPRICET = getParamEx(self.class, self.code, "STEPPRICET").param_value + 0
+		if minStepPrice == nil or tonumber(minStepPrice) == 0 then
+			--message("Для инструмента "..List[row][3].." нет минимального шага цены в Квике. Добавьте его в таблицу инструментов", 2)
+		end		
+		
+	end  
+	
+	--спот
+
+	local List = secListSPOT() --Это двумерный массив
+	
+	--добавляем строки с инструментами в таблицу робота
+	for row=1, #List do
+		--DeleteRow(self.t.t_id, row)
+		local secGroup = List[row][1] --код вида фьюча, например BR для брент
+		
+		--rowNum = window:AddRow({},'')--добавляем пустую строку, затем устанавливаем значения полей
+		rowNum = InsertRow(window.hID, -1)
+		
+		window:SetValueByColName(rowNum, 'Account', '11267')
+		window:SetValueByColName(rowNum, 'Depo', 'NL0011100043')
+		window:SetValueByColName(rowNum, 'Name', List[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', List[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Class', 'QJSIM') --класс бумаги
+		window:SetValueByColName(rowNum, 'Lot', List[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'StartStop', 'Start')
+		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
+		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
+		
+		window:SetValueByColName(rowNum, 'MA60name', secGroup ..'_grid_MA60')--это уже не надо, т.к. я научился вычислять среднюю скользящую сам
+		window:SetValueByColName(rowNum, 'PriceName', secGroup..'_grid_price')
+		
+		--чтобы получить номер колонки используем функцию GetColNumberByName()
+		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
+		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
+		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
+		
+		local minStepPrice = getParamEx('QJSIM', List[row][3], "SEC_PRICE_STEP").param_value + 0
+		window:SetValueByColName(rowNum, 'minStepPrice', tostring(minStepPrice))
+		--self.STEPPRICET = getParamEx(self.class, self.code, "STEPPRICET").param_value + 0
+		if minStepPrice == nil or tonumber(minStepPrice) == 0 then
+			--message("Для инструмента "..List[row][3].." нет минимального шага цены в Квике. Добавьте его в таблицу инструментов", 2)
+		end		
+		
 	end  
 	
 	
@@ -487,7 +569,13 @@ function main()
 	
 	--задержка 100 миллисекунд между итерациями 
 	while is_run do
-		sleep(5000)
+	
+		for row=1, GetTableSize(window.hID) do
+			main_loop(row, window:GetValueByColName(row, 'Ticker').image, window:GetValueByColName(row, 'Class').image)
+		end
+	
+		
+		sleep(1000)
 	end
 	
 
@@ -509,6 +597,475 @@ function Green(t_id, Line, Col)  -- Зеленый
    if Col == nil then Col = QTABLE_NO_INDEX; end;
    SetColor(t_id, Line, Col, RGB(165,227,128), RGB(0,0,0), RGB(165,227,128), RGB(0,0,0));
 end;
+
+
+
+
+--+-----------------------------------------------
+--|			ОСНОВНОЙ АЛГОРИТМ
+--+-----------------------------------------------
+
+--эта функция должна вызываться из обрамляющего цикла в функции main()
+function main_loop(row, sec, class)
+
+	if isConnected() == 0 then
+		--window:InsertValue("Сигнал", "Not connected")
+		return
+	end
+	
+	security.code = sec
+	security.class = class	
+	security:Update()	--обновляет цену последней сделки в таблице security (свойство Last,Close)
+
+	--помещаем цену в окно робота. просто для визуального наблюдения		
+	window:SetValueByColName(row, 'LastPrice', tostring(security.last))
+
+	local IdPriceCombo = window:GetValueByColName(row, 'PriceName').image   --идентификатор графика цены выбранной бумаги (таблица)
+	
+	--источник комментов [1] - это http://robostroy.ru/community/article.aspx?id=796
+	--[1]Сначала мы получаем количество свечей. здесь: на графике цены
+	NumCandles = getNumCandles(IdPriceCombo)	
+
+	if NumCandles==0 then
+		return 0
+	end
+
+	--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
+	local tPrice,n,s = getCandlesByIndex(IdPriceCombo,0,NumCandles-3, 2)		
+	strategy:SetSeries(tPrice)
+
+	local IdMA = window:GetValueByColName(row, 'MA60name').image
+	
+	--далее пошли запрашивать цены с графика moving averages
+	local tMA,n,s = getCandlesByIndex(IdMA,0,NumCandles-3, 2)		
+	strategy.Ma1Series=tMA	--этого поля (Ma1Series) нет в Init, оно создается здесь
+
+	--главное начинается здесь
+
+	strategy:CalcLevels() --получим значения цены и средней скользящей
+	
+	--message(IdPriceCombo)
+	
+	--EMA(60, IdPriceCombo)--рассчитываем среднюю скользящую (экспоненциальную)
+
+	
+	
+	local acc = window:GetValueByColName(row, 'Account').image
+	local currency_CETS='USD'
+	--обновляем данные в визуальной таблице робота
+	
+	window:SetValueByColName(row, 'Position', tostring(trader:GetCurrentPosition(sec, acc, class, currency_CETS)))
+	
+	--window:SetValueByColName(row, 'MA60Pred', tostring(EMA_TMP[#EMA_TMP-2]))
+	--window:SetValueByColName(row, 'MA60', tostring(EMA_TMP[#EMA_TMP-1]))
+
+	window:SetValueByColName(row, 'MA60Pred', tostring(strategy.Ma1Pred))
+	window:SetValueByColName(row, 'MA60', tostring(strategy.Ma1))
+	
+	window:SetValueByColName(row, 'PricePred', strategy.PriceSeries[0].close)
+	window:SetValueByColName(row, 'Price', strategy.PriceSeries[1].close)
+	
+	local working = window:GetValueByColName(row, 'StartStop').image 
+	
+	if working=='Start'  then --инструмент выключен. когда включен, там будет Stop
+		return
+	end
+		
+		
+	-------------------------------------------------------------------
+	--			ОСНОВНОЙ АЛГОРИТМ
+	-------------------------------------------------------------------
+	
+	if current_state == 'waiting for a signal' then
+		--ожидаем новые сигналы 
+		wait_for_signal()
+		
+	elseif current_state == 'processing signal' then
+		--в этом состоянии робот шлет заявки на сервер, пока не наберет позицию или не кончится время или количество попыток
+		processSignal()
+		
+	elseif current_state == 'waiting for a response' then
+		--заявку отправили, ждем пока придет ответ, перед отправкой новой
+		wait_for_response()
+		
+	end
+
+end
+
+--обработать сигнал
+function processSignal()
+	
+	logstoscreen:add('processing signal: '..signal_direction)
+	
+	--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
+	local planQuantity = tonumber(settings.LotSizeBox)
+	if signal_direction == 'sell' then
+		planQuantity = -1*planQuantity --сделаем отрицательным
+	end
+	logstoscreen:add('plan quantity: ' .. tostring(planQuantity))
+	
+	--посмотреть, сколько уже лотов/контрактов есть в позиции (с отбором по этому роботу)
+	local factQuantity = trader:GetCurrentPosition(settings.SecCodeBox, settings.ClientBox, settings.currency_CETS)
+	logstoscreen:add('fact quantity: ' .. tostring(factQuantity))
+	
+	if settings.rejim == 'revers' then
+		--все разрешено
+		
+	elseif settings.rejim == 'long' then
+		--нельзя в шорт. длинную позицию продаем в ноль
+		if signal_direction == 'sell' and factQuantity>=0 then
+			planQuantity = 0
+		end
+		
+	elseif settings.rejim == 'short' then
+		--нельзя в лонг. короткую позицию откупаем в ноль
+		if signal_direction == 'buy' and factQuantity<=0 then
+			planQuantity = 0
+		end
+	end
+	
+	--если эти значения отличаются, то добираем позу
+	if (signal_direction == 'buy' and factQuantity < planQuantity )
+		or (signal_direction == 'sell' and factQuantity > planQuantity)
+		then
+		
+		--послать заявку
+		
+		trans_id = helper:getMiliSeconds_trans_id() --глобальная для скрипта переменная
+		
+		local qty = planQuantity - factQuantity
+		
+		if qty == 0 then
+			logstoscreen:add('ОШИБКА! qty = 0')
+			--переходим к ожиданию нового сигнала
+			current_state = 'waiting for a signal'
+			return
+		end
+		
+		logstoscreen:add('qty: ' .. tostring(qty))
+		
+		if signal_direction == 'sell' then --приведем к положительному
+			qty = -1*qty
+		end
+		
+		
+		--!!!!!!!!!!!!для отладки. хочу проверить как будет отрабатывать ожидание добора позиции 
+		--qty = 5
+		
+		local row = orders:AddLine()
+		orders:SetValue(row, "trans_id", trans_id)
+		orders:SetValue(row, "signal_id", signal_id)
+		orders:SetValue(row, "qty", qty)
+		
+		if signal_direction == 'buy' then
+			Buy(qty, trans_id)
+		elseif signal_direction == 'sell' then
+			Sell(qty, trans_id)
+		end
+		
+		--включаем флаг, признак того, что робот ждет ответа на выставленную заявку
+		--флаг выключится в функции OnTrade()
+		--we_are_waiting_result = true
+		current_state = 'waiting for a response'
+
+	else
+		logstoscreen:add('вся позиция уже набрана, заявка не отправлена!')
+		
+		current_state = 'waiting for a signal'
+		
+		--обновим состояние сигнала в таблице сигналов
+		local rows=0
+		local cols=0
+		rows,cols = signals:GetSize()
+		for j = 1 , rows do --в таких таблицах нумерация начинается с единицы
+			if tostring(signal_id) == tostring(signals:GetValue(j, "id").image) then
+			
+				signals:SetValue(j, "done", true) 
+				break
+			end
+		end		
+		
+		signal_id = nil
+		trans_id = nil
+	end
+	
+end
+
+--ждать ответа на отправленную заявку
+function wait_for_response()
+	logstoscreen:add('we are waiting the result of sending order')
+
+	local s = orders:GetSize()
+	for i = 1, s do
+		
+		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_id) then
+			
+			if orders:GetValue(i, 'trade')~=nil and( orders:GetValue(i, 'trade').image~='0' or orders:GetValue(i, 'trade').image~='') then
+				--если в таблице orders появился номер сделки, это значит что заявка обработалась.
+				
+				--а вот и не факт. нужно сравнить количество в заявке и в сделке. если заявка полностью удовлетворена, то только тогда это значит, что она обработалась
+				--хотя для объемов в 10 лотов наверное любой фьючерс будет ликвидным...
+				
+				--пока не будут завязываться на это. просто выведу в лог
+				local qty_fact = orders:GetValue(i, 'qty_fact').image
+				if qty_fact == nil or qty_fact == '' then
+					qty_fact = 0
+				else
+					qty_fact = tonumber(qty_fact)
+				end
+			
+				if tonumber(orders:GetValue(i, 'qty').image) == qty_fact then
+					
+					logstoscreen:add('order '..orders:GetValue(i, 'order').image..': qty = qty_fact - order is processed')
+					
+				end
+				
+				logstoscreen:add('order '..orders:GetValue(i, 'order').image..' processed')
+				
+				current_state = 'processing signal'
+				
+			
+			end
+		end
+	end
+		
+end
+
+--ждать новые сигналы
+function wait_for_signal()
+
+	--нужно только так, сначала поместить сигналы в переменные, потом работать с переменными
+	--это надо, чтобы работал тест сигналов - когда включается тестовый флаг, функция сигнала возвращает истину, а перед этим выключает флаг
+	--т.е. более одного раза вызвать функцию сигнала в режиме теста не получится
+	local signal_buy =  signal_buy()
+	local signal_sell =  signal_sell()
+	
+	if signal_buy == false and signal_sell == false then
+		return
+	end
+		
+	--если есть сигнал, нужно проверить, а может мы его уже обработали.-
+	--таймфрейм тут планируется 1 час, поэтому главный цикл будет видеть сигнал
+	--еще целый час после обработки
+	local dt=strategy.PriceSeries[1].datetime--предыдущая свеча
+	local candle_date = dt.year..'-'..dt.month..'-'..dt.day
+	local candle_time = dt.hour..':'..dt.min..':'..dt.sec
+
+	--проверка наличия сигнала, чтобы не обрабатывать повторно
+	if find_signal(candle_date, candle_time) == true then
+		return
+	end
+		
+	--logstoscreen:add('we have got a signal: ')
+	
+	if signal_buy == true then 
+		--закрытие свечи выше средней - покупка
+		signal_direction = 'buy'
+	elseif signal_sell == true	then 
+		--закрытие часовика ниже средней - продажа
+		signal_direction = 'sell'
+	end
+	
+	--сигнала в таблице нет, добавляем новый
+	
+	signal_id = helper:getMiliSeconds_trans_id()
+	
+	local row = signals:AddLine()
+	signals:SetValue(row, "id", 	signal_id)
+	signals:SetValue(row, "dir", 	signal_direction)
+	signals:SetValue(row, "date", candle_date)
+	signals:SetValue(row, "time", 	candle_time) 
+	signals:SetValue(row, "price", strategy.PriceSeries[1].close)
+	signals:SetValue(row, "MA", 	EMA_TMP[#EMA_TMP-1])
+	signals:SetValue(row, "done", false)
+	
+	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
+	current_state = 'processing signal'
+
+end
+
+--[[ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
+сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
+т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю следующую свечу--]]
+function find_signal(candle_date, candle_time)
+	local rows=0
+	local cols=0
+	rows,cols = signals:GetSize()
+	for i = 1 , rows do --в таких таблицах нумерация начинается с единицы
+		if signals:GetValue(i, "date").image == candle_date and
+			signals:GetValue(i, "time").image == candle_time then
+			--уже есть сигнал, повторно обрабатывать не надо
+			--logstoscreen:add('the signal is already processed: '..tostring(signals:GetValue(i, "id").image))
+			return true
+		end
+	end
+	return false
+end
+--+-----------------------------------------------
+--|			ОСНОВНОЙ АЛГОРИТМ - КОНЕЦ
+--+-----------------------------------------------
+
+
+function signal_buy()
+
+--  Ma1 = Ma1Series[1].close						--предыдущая свеча
+--  Ma1Pred = Ma1Series[0].close 	--ENS		--предпредыдущая свеча
+
+	--для тестов
+	if working == true then
+		if test_signal_buy == true then
+			test_signal_buy = false
+			return true
+		end
+	end
+	
+	--[[
+	if strategy.Ma1 ~= 0 
+	and strategy.Ma1Pred  ~= 0 
+	and strategy.PriceSeries[0].close ~= 0
+	and strategy.PriceSeries[1].close ~= 0
+	and strategy.PriceSeries[0].close < strategy.Ma1Pred --предпредыдущий бар ниже средней
+	and strategy.PriceSeries[1].close > strategy.Ma1 --предыдущий бар выше средней
+	then
+		return true
+	else
+		return false
+	end
+	--]]
+	
+
+	if EMA_TMP[#EMA_TMP-1]  ~= 0 		--предыдущая свеча
+	and EMA_TMP[#EMA_TMP-2]  ~= 0 		--предпредыдущая свеча
+	and strategy.PriceSeries[0].close ~= 0
+	and strategy.PriceSeries[1].close ~= 0
+	and strategy.PriceSeries[0].close < EMA_TMP[#EMA_TMP-2] --предпредыдущий бар ниже средней
+	and strategy.PriceSeries[1].close > EMA_TMP[#EMA_TMP-1] --предыдущий бар выше средней
+	then
+		return true
+	else
+		return false
+	end	
+end
+
+function signal_sell()
+
+--  Ma1 = Ma1Series[1].close						--предыдущая свеча
+--  Ma1Pred = Ma1Series[0].close 	--ENS		--предпредыдущая свеча
+
+
+	--для тестов
+	if working == true then
+		if test_signal_sell == true then
+			test_signal_sell = false
+			return true
+		end
+	end
+	
+	if EMA_TMP[#EMA_TMP-1]  ~= 0 		--предыдущая свеча
+	and EMA_TMP[#EMA_TMP-2]  ~= 0 		--предпредыдущая свеча
+--	if strategy.Ma1 ~= 0 
+--	and strategy.Ma1Pred  ~= 0 
+	and strategy.PriceSeries[0].close ~= 0
+	and strategy.PriceSeries[1].close ~= 0
+	and strategy.PriceSeries[0].close > EMA_TMP[#EMA_TMP-2] --предпредыдущий бар выше средней
+	and strategy.PriceSeries[1].close < EMA_TMP[#EMA_TMP-1] --предыдущий бар ниже средней
+--	and strategy.PriceSeries[0].close > strategy.Ma1Pred --предпредыдущий бар выше средней
+--	and strategy.PriceSeries[1].close < strategy.Ma1 --предыдущий бар ниже средней
+	then
+		return true
+	else
+		return false
+	end
+
+end
+
+
+
+--свой расчет средней скользящей (чтобы терминал меньше занимал памяти, не будем добавлять на графики цен индикатор ЕМА, а посчитаем его сами)
+
+--Period - период средней (количество свечей)
+--lastCandle - последняя рассчитанная свеча (чтобы не считать все с нуля на каждом вызове)
+function EMA(Period, IdPriceCombo)
+
+	--[1]Сначала мы получаем количество свечей. здесь: на графике цены
+	local NumCandles = getNumCandles(IdPriceCombo)
+	if NumCandles == 0 then
+		return
+	end
+
+--[[
+В справке к Квику есть формула: 
+EMAi = (EMAi-1 * (n-1) + 2*Pi) / (n+1), 
+где Pi - значение цены в текущем периоде, 
+EMAi - значение EMA текущего периода, 
+EMAi-1 - значение EMA предыдущего периода 
+Начальное значение равно параметру, по которому рассчитывается индикатор: EMA0=P0 – при расчете по цене 
+--]]
+	local tPrice = {}
+	local n = 0
+	local s = ''
+	tPrice,n,s = getCandlesByIndex(IdPriceCombo,0,0,NumCandles)		
+	
+	--пример работы со свечами
+	--tPrice[number].datetime.hour
+	--PriceSeries[0].close
+	
+	local answ = 0
+	
+	local idp = 11 --точность округлений (знаков после точки)
+	local start = 0
+	if lastCandleMA == nil then
+		start = 0
+	else
+		start = lastCandleMA
+	end
+	for i = start, n-1 do
+	
+		fEMA(i, Period, tPrice, idp)
+		
+	end
+	
+	lastCandleMA = n-1
+	
+end
+
+--[[Exponential Moving Average (EMA)
+EMAi = (EMAi-1*(n-1)+2*Pi) / (n+1)
+]]
+--ds - DataSource - таблица свечек
+--idp - точность округления
+function fEMA(Index, Period, ds, idp) 
+	
+	--logstoscreen:add('candle '..tostring(Index)..' close = '..tostring(ds[Index].close))
+	local Out = 0
+	if Index == 0 then
+		EMA_TMP[Index]=round(ds[Index].close,idp)
+		--logstoscreen:add('index = 0 and EMA = '..tostring(EMA_TMP[Index]))
+	else
+		local prev_ema = EMA_TMP[(Index-1)]
+		local candle = ds[Index]
+		EMA_TMP[Index]=round((prev_ema*(Period-1)+2*candle.close) / (Period+1),idp)
+	end
+
+	if Index >= Period-1 then -- минус 1 - потому что идем от нуля
+		Out = EMA_TMP[Index]
+		--logstoscreen:add('Index '..tostring(Index)..' EMA = '..tostring(EMA_TMP[Index]))
+	end
+
+	return round(Out,idp)
+	
+end
+
+------------------------------------------------------------------
+--Вспомогательные функции для EMA
+------------------------------------------------------------------
+function round(num, idp)
+if idp and num then
+   local mult = 10^(idp or 0)
+   if num >= 0 then return math_floor(num * mult + 0.5) / mult
+   else return math_ceil(num * mult - 0.5) / mult end
+else return num end
+end
 
 
 
