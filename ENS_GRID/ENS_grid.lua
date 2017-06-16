@@ -32,6 +32,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
 dofile (getScriptPath().."\\Classes\\SettingsGRID.lua")
 dofile (getScriptPath().."\\Classes\\Security.lua")--этот класс переопределен для данного робота
 
+dofile (getScriptPath() .. "\\quik_table_wrapper.lua")
 
 --Это таблицы:
 trader ={}
