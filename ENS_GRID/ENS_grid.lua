@@ -4,9 +4,11 @@
 --создать графики цены всех новых инструментов. идентификатор графика формируется на основании тикера, см. образец
 --готово.
 
---инструкция по программированию
+--cheat sheet
 --установка значения в ячейке таблицы
 --window:SetValueByColName(row, 'LastPrice', tostring(security.last))
+--получение значения из ячейки
+--local acc = window:GetValueByColName(row, 'Account').image
 
 local bit = require"bit"
 local math_ceil = math.ceil
@@ -21,6 +23,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Trader.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Transactions.lua")
 --dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Security.lua") --этот класс переопределен для данного робота
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logs.lua")
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logstoscreen.lua")
 
 --common within one strategy
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
@@ -38,6 +41,7 @@ settings={}
 strategy={}
 security={}
 window={}
+logstoscreen={}
 
 logs={}
 
@@ -45,12 +49,14 @@ local is_run = true	--флаг работы скрипта, пока истина - скрипт работает
 
 --local working = false	--флаг активности. чтобы не закрывая окно можно быть включить/выключить робота
 
---расчет средней 
-local lastCandle = nil
-local EMA_TMP = {}
-
 test_signal_buy = false
 test_signal_sell = false
+
+local signals = {} --таблица обработанных сигналов.	
+local orders = {} --таблица заявок
+
+local processed_trades = {} --таблица обработанных сделок
+local processed_orders = {} --таблица обработанных заявок
 
 function OnInit(path)
 	trader = Trader()
@@ -68,6 +74,10 @@ function OnInit(path)
 	strategy:Init()
 	transactions=Transactions()
 	transactions:Init(settings.ClientBox,settings.DepoBox, settings.SecCodeBox,settings.ClassCode)
+	
+  	logstoscreen = LogsToScreen()
+	local position = {x=300,y=10,dx=500,dy=400}
+	logstoscreen:Init(position) 	
 end
 
 --это не обработчик события, а просто функция покупки
@@ -201,7 +211,81 @@ end
 
 --событие, возникающее после отправки заявки на сервер
 function OnTransReply(trans_reply)
+
+	--logstoscreen:add('OnTransReply '..helper:getMiliSeconds())
+	
+	local s = orders:GetSize()
+	--logstoscreen:add('size of orders = '..tostring(s))
+	for i = 1, s do
+		--здесь придется обойтись без строки в главном окне - row, т.к. его негде получить в контексте этой функции
+		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_reply.trans_id) then
+			orders:SetValue(i, 'order', trans_reply.order_num)
+			--logstoscreen:add('OnTransReply - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
+			break
+		end
+	end
+	
 end 
+
+function OnTrade(trade)
+
+	
+	--если сделка уже есть в таблице обработанных, то еще раз не надо ее обрабатывать
+	local found = false
+	for i = 1, #processed_trades do
+		if tostring(processed_trades[i]) == tostring(trade.trade_num) then
+			found = true
+			break
+		end
+	end
+	if found == true then
+		return
+	else
+		processed_trades[#processed_trades+1] = trade.trade_num
+	end
+		
+	
+	--logstoscreen:add('onTrade '..helper:getMiliSeconds())
+	
+	local s = orders:GetSize()
+	for i = 1, s do
+		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trade.trans_id) 
+			and tostring(orders:GetValue(i, 'order').image) == tostring(trade.order_num) then
+			orders:SetValue(i, 'trade', trade.trade_num)
+			local qty_fact = orders:GetValue(i, 'qty_fact').image
+			if qty_fact == nil or qty_fact == '' then
+				qty_fact = 0
+			else
+				qty_fact = tonumber(qty_fact)
+			end
+			orders:SetValue(i, 'qty_fact', qty_fact + tonumber(trade.qty))
+			--logstoscreen:add('OnTrade - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
+			break
+		end
+	end
+	
+end
+
+function OnOrder(order)
+	
+	--если заявка уже есть в таблице обработанных, то еще раз не надо ее обрабатывать
+	local found = false
+	for i = 1, #processed_orders do
+		if tostring(processed_orders[i]) == tostring(order.order_num) then
+			found = true
+			break
+		end
+	end
+	if found == true then
+		return
+	else
+		processed_orders[#processed_orders+1] = order.order_num
+	end
+	
+	--logstoscreen:add('onOrder '..helper:getMiliSeconds())
+
+	
+end
 
 --f_cb – функция обратного вызова для обработки событий в таблице. вызывается из main()
 --(или, другими словами, обработчик клика по таблице робота)
@@ -394,7 +478,13 @@ function main()
 	--'StartStop' - "кнопка", управляющая включением робота для конкретного инструмента. если робот выключен, то он все равно показывает
 	--значения последней цены, предпредыдущей и предыдущей цены и средней скользящей
 	
-	window:Init(settings.TableCaption, {'Account','Depo','Name','Ticker','Class', 'Lot', 'Position','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice'})
+	--rejim: long / short / revers
+	--sig_dir - signal direction
+	--trans_id - число, идентификатор пользовательской транзакции, отправленной программно. по нему фильтруем сделки и заявки при наборе позиции
+	--current_state - текущее состояние по инструменту
+	--signal_id - идентификатор сигнала
+	
+	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id'})
 	
 	
 	
@@ -557,8 +647,6 @@ function main()
 	
 	
 	
-	
-	
 	SetTableNotificationCallback (window.hID, f_cb)
 
 	--при запуске один раз выполним OnParam, чтобы заполнить последние значения
@@ -566,6 +654,19 @@ function main()
 	for row=1, GetTableSize(window.hID) do
 		OnParam( window:GetValueByColName(row, 'Class').image, window:GetValueByColName(row, 'Ticker').image )
 	end
+	
+	
+---------------------------------------------------------------------------	
+	if createTableSignals() == false then
+		return
+	end
+
+	SetWindowPos(signals.t_id, 810, 10, 600, 200)
+
+---------------------------------------------------------------------------	
+	if createTableOrders() == false then
+		return
+	end	
 	
 	--задержка 100 миллисекунд между итерациями 
 	while is_run do
@@ -599,6 +700,65 @@ function Green(t_id, Line, Col)  -- Зеленый
 end;
 
 
+function createTableSignals()
+	
+	signals = QTable.new()
+	if not signals then
+		message("error creation table Signals!", 3)
+		return false
+	else
+		--message("table with id = " ..signals.t_id .. " created", 1)
+	end
+
+	signals:AddColumn("row", QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	signals:AddColumn("id", QTABLE_INT_TYPE, 10)
+	signals:AddColumn("dir", QTABLE_STRING_TYPE, 4)
+	signals:AddColumn("account", QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("depo", QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("sec_code", QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("class_code", QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("date", QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
+	signals:AddColumn("time", QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
+	signals:AddColumn("price", QTABLE_DOUBLE_TYPE, 10)
+	signals:AddColumn("MA", QTABLE_DOUBLE_TYPE, 10)
+	signals:AddColumn("done", QTABLE_STRING_TYPE, 10)
+	
+	signals:SetCaption("Signals")
+	signals:Show()
+	
+	return true
+	
+end
+
+function createTableOrders()
+	
+	orders = QTable.new()
+	if not orders then
+		message("error creation table orders!", 3)
+		return false
+	else
+		--message("table with id = " ..orders.t_id .. " created", 1)
+	end
+	
+	orders:AddColumn("row", QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	orders:AddColumn("signal_id", QTABLE_INT_TYPE, 10)
+	orders:AddColumn("account", QTABLE_STRING_TYPE, 10)
+	orders:AddColumn("depo", QTABLE_STRING_TYPE, 10)
+	orders:AddColumn("sec_code", QTABLE_STRING_TYPE, 10)
+	orders:AddColumn("class_code", QTABLE_STRING_TYPE, 10)
+	orders:AddColumn("trans_id", QTABLE_INT_TYPE, 10)
+	orders:AddColumn("order", QTABLE_INT_TYPE, 10)
+	orders:AddColumn("trade", QTABLE_INT_TYPE, 10)
+	
+	orders:AddColumn("qty", QTABLE_INT_TYPE, 10) --количество из заявки
+	orders:AddColumn("qty_fact", QTABLE_INT_TYPE, 10) --количество из сделок
+	
+	orders:SetCaption("orders")
+	orders:Show()
+	
+	return true
+	
+end
 
 
 --+-----------------------------------------------
@@ -675,54 +835,59 @@ function main_loop(row, sec, class)
 	-------------------------------------------------------------------
 	--			ОСНОВНОЙ АЛГОРИТМ
 	-------------------------------------------------------------------
+	local current_state = window:GetValueByColName(row, 'current_state').image
 	
 	if current_state == 'waiting for a signal' then
 		--ожидаем новые сигналы 
-		wait_for_signal()
+		wait_for_signal(row)
 		
 	elseif current_state == 'processing signal' then
 		--в этом состоянии робот шлет заявки на сервер, пока не наберет позицию или не кончится время или количество попыток
-		processSignal()
+		processSignal(row)
 		
 	elseif current_state == 'waiting for a response' then
 		--заявку отправили, ждем пока придет ответ, перед отправкой новой
-		wait_for_response()
+		wait_for_response(row)
 		
 	end
 
 end
 
 --обработать сигнал
-function processSignal()
+function processSignal(row)
 	
-	logstoscreen:add('processing signal: '..signal_direction)
+	--logstoscreen:add('processing signal: '..signal_direction)
 	
-	--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках робота
-	local planQuantity = tonumber(settings.LotSizeBox)
+	--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках каждой строки с инструментом
+	
+	local planQuantity = tonumber(window:GetValueByColName(row, 'Lot').image)
+	local signal_direction = window:GetValueByColName(row, 'sig_dir').image
 	if signal_direction == 'sell' then
 		planQuantity = -1*planQuantity --сделаем отрицательным
 	end
-	logstoscreen:add('plan quantity: ' .. tostring(planQuantity))
+	--logstoscreen:add('plan quantity: ' .. tostring(planQuantity))
 	
-	--посмотреть, сколько уже лотов/контрактов есть в позиции (с отбором по этому роботу)
-	local factQuantity = trader:GetCurrentPosition(settings.SecCodeBox, settings.ClientBox, settings.currency_CETS)
-	logstoscreen:add('fact quantity: ' .. tostring(factQuantity))
+	--посмотреть, сколько уже лотов/контрактов есть в позиции (валюту для СЭЛТ пока оставим пустой, главное - сделать базовый функционал)
+	local factQuantity = trader:GetCurrentPosition(window:GetValueByColName(row, 'Ticker').image, window:GetValueByColName(row, 'Account').image, window:GetValueByColName(row, 'Class').image)
+	--logstoscreen:add('fact quantity: ' .. tostring(factQuantity))
 	
-	if settings.rejim == 'revers' then
+	if window:GetValueByColName(row, 'rejim').image == 'revers' then
 		--все разрешено
 		
-	elseif settings.rejim == 'long' then
+	elseif window:GetValueByColName(row, 'rejim').image == 'long' then
 		--нельзя в шорт. длинную позицию продаем в ноль
 		if signal_direction == 'sell' and factQuantity>=0 then
 			planQuantity = 0
 		end
 		
-	elseif settings.rejim == 'short' then
+	elseif window:GetValueByColName(row, 'rejim').image == 'short' then
 		--нельзя в лонг. короткую позицию откупаем в ноль
 		if signal_direction == 'buy' and factQuantity<=0 then
 			planQuantity = 0
 		end
 	end
+	
+	local signal_id = window:GetValueByColName(row, 'signal_id').image
 	
 	--если эти значения отличаются, то добираем позу
 	if (signal_direction == 'buy' and factQuantity < planQuantity )
@@ -730,19 +895,21 @@ function processSignal()
 		then
 		
 		--послать заявку
+		local trans_id = helper:getMiliSeconds_trans_id()
 		
-		trans_id = helper:getMiliSeconds_trans_id() --глобальная для скрипта переменная
+		window:SetValueByColName(row, 'trans_id', tostring(trans_id))
 		
 		local qty = planQuantity - factQuantity
 		
 		if qty == 0 then
-			logstoscreen:add('ОШИБКА! qty = 0')
+			--logstoscreen:add('ОШИБКА! qty = 0')
 			--переходим к ожиданию нового сигнала
-			current_state = 'waiting for a signal'
+			 
+			window:SetValueByColName(row, 'current_state', 'waiting for a signal')
 			return
 		end
 		
-		logstoscreen:add('qty: ' .. tostring(qty))
+		--logstoscreen:add('qty: ' .. tostring(qty))
 		
 		if signal_direction == 'sell' then --приведем к положительному
 			qty = -1*qty
@@ -752,10 +919,13 @@ function processSignal()
 		--!!!!!!!!!!!!для отладки. хочу проверить как будет отрабатывать ожидание добора позиции 
 		--qty = 5
 		
-		local row = orders:AddLine()
-		orders:SetValue(row, "trans_id", trans_id)
-		orders:SetValue(row, "signal_id", signal_id)
-		orders:SetValue(row, "qty", qty)
+		
+		
+		local newR = orders:AddLine()
+		orders:SetValue(newR, "row", row)
+		orders:SetValue(newR, "trans_id", trans_id)
+		orders:SetValue(newR, "signal_id", signal_id)
+		orders:SetValue(newR, "qty", qty)
 		
 		if signal_direction == 'buy' then
 			Buy(qty, trans_id)
@@ -766,39 +936,44 @@ function processSignal()
 		--включаем флаг, признак того, что робот ждет ответа на выставленную заявку
 		--флаг выключится в функции OnTrade()
 		--we_are_waiting_result = true
-		current_state = 'waiting for a response'
+		window:SetValueByColName(row, 'current_state', 'waiting for a response')
 
 	else
-		logstoscreen:add('вся позиция уже набрана, заявка не отправлена!')
+		--logstoscreen:add('вся позиция уже набрана, заявка не отправлена!')
 		
-		current_state = 'waiting for a signal'
+		window:SetValueByColName(row, 'current_state', 'waiting for a signal')
 		
 		--обновим состояние сигнала в таблице сигналов
 		local rows=0
 		local cols=0
 		rows,cols = signals:GetSize()
 		for j = 1 , rows do --в таких таблицах нумерация начинается с единицы
-			if tostring(signal_id) == tostring(signals:GetValue(j, "id").image) then
+			if tostring(signal_id) == tostring(signals:GetValue(j, "id").image) 
+				and row == tonumber(signals:GetValue(j, "row").image)
+				then
 			
 				signals:SetValue(j, "done", true) 
 				break
 			end
 		end		
 		
-		signal_id = nil
-		trans_id = nil
+		window:SetValueByColName(row, 'trans_id', nil)
+		window:SetValueByColName(row, 'signal_id', nil)
 	end
 	
 end
 
 --ждать ответа на отправленную заявку
-function wait_for_response()
-	logstoscreen:add('we are waiting the result of sending order')
+function wait_for_response(row)
+	--logstoscreen:add('we are waiting the result of sending order')
 
 	local s = orders:GetSize()
 	for i = 1, s do
 		
-		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_id) then
+		local trans_id = window:GetValueByColName(row, 'trans_id').image
+		
+		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_id)
+			and tonumber(orders:GetValue(i, 'row').image) == row then
 			
 			if orders:GetValue(i, 'trade')~=nil and( orders:GetValue(i, 'trade').image~='0' or orders:GetValue(i, 'trade').image~='') then
 				--если в таблице orders появился номер сделки, это значит что заявка обработалась.
@@ -816,13 +991,13 @@ function wait_for_response()
 			
 				if tonumber(orders:GetValue(i, 'qty').image) == qty_fact then
 					
-					logstoscreen:add('order '..orders:GetValue(i, 'order').image..': qty = qty_fact - order is processed')
+					--logstoscreen:add('order '..orders:GetValue(i, 'order').image..': qty = qty_fact - order is processed')
 					
 				end
 				
-				logstoscreen:add('order '..orders:GetValue(i, 'order').image..' processed')
+				--logstoscreen:add('order '..orders:GetValue(i, 'order').image..' processed')
 				
-				current_state = 'processing signal'
+				window:SetValueByColName(row, 'current_state', 'processing signal')
 				
 			
 			end
@@ -832,7 +1007,7 @@ function wait_for_response()
 end
 
 --ждать новые сигналы
-function wait_for_signal()
+function wait_for_signal(row)
 
 	--нужно только так, сначала поместить сигналы в переменные, потом работать с переменными
 	--это надо, чтобы работал тест сигналов - когда включается тестовый флаг, функция сигнала возвращает истину, а перед этим выключает флаг
@@ -852,47 +1027,55 @@ function wait_for_signal()
 	local candle_time = dt.hour..':'..dt.min..':'..dt.sec
 
 	--проверка наличия сигнала, чтобы не обрабатывать повторно
-	if find_signal(candle_date, candle_time) == true then
+	if find_signal(row, candle_date, candle_time) == true then
 		return
 	end
 		
 	--logstoscreen:add('we have got a signal: ')
 	
+	local sig_dir = nil
 	if signal_buy == true then 
 		--закрытие свечи выше средней - покупка
-		signal_direction = 'buy'
+		sig_dir='buy'
+		
 	elseif signal_sell == true	then 
 		--закрытие часовика ниже средней - продажа
-		signal_direction = 'sell'
+		sig_dir='sell'
+		
 	end
 	
+	window:SetValueByColName(row, 'sig_dir', sig_dir)
+	
 	--сигнала в таблице нет, добавляем новый
+	local signal_id = helper:getMiliSeconds_trans_id()
+	window:SetValueByColName(row, 'signal_id', tostring(signal_id))
 	
-	signal_id = helper:getMiliSeconds_trans_id()
-	
-	local row = signals:AddLine()
-	signals:SetValue(row, "id", 	signal_id)
-	signals:SetValue(row, "dir", 	signal_direction)
-	signals:SetValue(row, "date", candle_date)
-	signals:SetValue(row, "time", 	candle_time) 
-	signals:SetValue(row, "price", strategy.PriceSeries[1].close)
-	signals:SetValue(row, "MA", 	EMA_TMP[#EMA_TMP-1])
-	signals:SetValue(row, "done", false)
+	local newR = signals:AddLine()
+	signals:SetValue(newR, "row", row)
+	signals:SetValue(newR, "id", 	signal_id)
+	signals:SetValue(newR, "dir", 	sig_dir)
+	signals:SetValue(newR, "date", candle_date)
+	signals:SetValue(newR, "time", 	candle_time) 
+	signals:SetValue(newR, "price", strategy.PriceSeries[1].close)
+	--signals:SetValue(newR, "MA", 	EMA_TMP[#EMA_TMP-1])
+	signals:SetValue(newR, "price", strategy.Ma1)
+	signals:SetValue(newR, "done", false)
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
-	current_state = 'processing signal'
+	window:SetValueByColName(row, 'current_state', 'processing signal')
 
 end
 
 --[[ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
 сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
 т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю следующую свечу--]]
-function find_signal(candle_date, candle_time)
+function find_signal(row, candle_date, candle_time)
 	local rows=0
 	local cols=0
 	rows,cols = signals:GetSize()
 	for i = 1 , rows do --в таких таблицах нумерация начинается с единицы
-		if signals:GetValue(i, "date").image == candle_date and
+		if tonumber(signals:GetValue(i, "row").image) == row and
+			signals:GetValue(i, "date").image == candle_date and
 			signals:GetValue(i, "time").image == candle_time then
 			--уже есть сигнал, повторно обрабатывать не надо
 			--logstoscreen:add('the signal is already processed: '..tostring(signals:GetValue(i, "id").image))
@@ -917,9 +1100,11 @@ function signal_buy()
 			test_signal_buy = false
 			return true
 		end
+	else
+		return false
 	end
 	
-	--[[
+	---[[
 	if strategy.Ma1 ~= 0 
 	and strategy.Ma1Pred  ~= 0 
 	and strategy.PriceSeries[0].close ~= 0
@@ -933,7 +1118,7 @@ function signal_buy()
 	end
 	--]]
 	
-
+	--[[
 	if EMA_TMP[#EMA_TMP-1]  ~= 0 		--предыдущая свеча
 	and EMA_TMP[#EMA_TMP-2]  ~= 0 		--предпредыдущая свеча
 	and strategy.PriceSeries[0].close ~= 0
@@ -944,7 +1129,8 @@ function signal_buy()
 		return true
 	else
 		return false
-	end	
+	end
+--]]	
 end
 
 function signal_sell()
@@ -959,18 +1145,18 @@ function signal_sell()
 			test_signal_sell = false
 			return true
 		end
+	else
+		return false
 	end
 	
-	if EMA_TMP[#EMA_TMP-1]  ~= 0 		--предыдущая свеча
-	and EMA_TMP[#EMA_TMP-2]  ~= 0 		--предпредыдущая свеча
---	if strategy.Ma1 ~= 0 
---	and strategy.Ma1Pred  ~= 0 
+	if strategy.Ma1 ~= 0 
+	and strategy.Ma1Pred  ~= 0 
 	and strategy.PriceSeries[0].close ~= 0
 	and strategy.PriceSeries[1].close ~= 0
-	and strategy.PriceSeries[0].close > EMA_TMP[#EMA_TMP-2] --предпредыдущий бар выше средней
-	and strategy.PriceSeries[1].close < EMA_TMP[#EMA_TMP-1] --предыдущий бар ниже средней
---	and strategy.PriceSeries[0].close > strategy.Ma1Pred --предпредыдущий бар выше средней
---	and strategy.PriceSeries[1].close < strategy.Ma1 --предыдущий бар ниже средней
+--	and strategy.PriceSeries[0].close > EMA_TMP[#EMA_TMP-2] --предпредыдущий бар выше средней
+--	and strategy.PriceSeries[1].close < EMA_TMP[#EMA_TMP-1] --предыдущий бар ниже средней
+	and strategy.PriceSeries[0].close > strategy.Ma1Pred --предпредыдущий бар выше средней
+	and strategy.PriceSeries[1].close < strategy.Ma1 --предыдущий бар ниже средней
 	then
 		return true
 	else
@@ -978,99 +1164,4 @@ function signal_sell()
 	end
 
 end
-
-
-
---свой расчет средней скользящей (чтобы терминал меньше занимал памяти, не будем добавлять на графики цен индикатор ЕМА, а посчитаем его сами)
-
---Period - период средней (количество свечей)
---lastCandle - последняя рассчитанная свеча (чтобы не считать все с нуля на каждом вызове)
-function EMA(Period, IdPriceCombo)
-
-	--[1]Сначала мы получаем количество свечей. здесь: на графике цены
-	local NumCandles = getNumCandles(IdPriceCombo)
-	if NumCandles == 0 then
-		return
-	end
-
---[[
-В справке к Квику есть формула: 
-EMAi = (EMAi-1 * (n-1) + 2*Pi) / (n+1), 
-где Pi - значение цены в текущем периоде, 
-EMAi - значение EMA текущего периода, 
-EMAi-1 - значение EMA предыдущего периода 
-Начальное значение равно параметру, по которому рассчитывается индикатор: EMA0=P0 – при расчете по цене 
---]]
-	local tPrice = {}
-	local n = 0
-	local s = ''
-	tPrice,n,s = getCandlesByIndex(IdPriceCombo,0,0,NumCandles)		
-	
-	--пример работы со свечами
-	--tPrice[number].datetime.hour
-	--PriceSeries[0].close
-	
-	local answ = 0
-	
-	local idp = 11 --точность округлений (знаков после точки)
-	local start = 0
-	if lastCandleMA == nil then
-		start = 0
-	else
-		start = lastCandleMA
-	end
-	for i = start, n-1 do
-	
-		fEMA(i, Period, tPrice, idp)
-		
-	end
-	
-	lastCandleMA = n-1
-	
-end
-
---[[Exponential Moving Average (EMA)
-EMAi = (EMAi-1*(n-1)+2*Pi) / (n+1)
-]]
---ds - DataSource - таблица свечек
---idp - точность округления
-function fEMA(Index, Period, ds, idp) 
-	
-	--logstoscreen:add('candle '..tostring(Index)..' close = '..tostring(ds[Index].close))
-	local Out = 0
-	if Index == 0 then
-		EMA_TMP[Index]=round(ds[Index].close,idp)
-		--logstoscreen:add('index = 0 and EMA = '..tostring(EMA_TMP[Index]))
-	else
-		local prev_ema = EMA_TMP[(Index-1)]
-		local candle = ds[Index]
-		EMA_TMP[Index]=round((prev_ema*(Period-1)+2*candle.close) / (Period+1),idp)
-	end
-
-	if Index >= Period-1 then -- минус 1 - потому что идем от нуля
-		Out = EMA_TMP[Index]
-		--logstoscreen:add('Index '..tostring(Index)..' EMA = '..tostring(EMA_TMP[Index]))
-	end
-
-	return round(Out,idp)
-	
-end
-
-------------------------------------------------------------------
---Вспомогательные функции для EMA
-------------------------------------------------------------------
-function round(num, idp)
-if idp and num then
-   local mult = 10^(idp or 0)
-   if num >= 0 then return math_floor(num * mult + 0.5) / mult
-   else return math_ceil(num * mult - 0.5) / mult end
-else return num end
-end
-
-
-
-
-
-
-
 
