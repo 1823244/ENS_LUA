@@ -6,14 +6,28 @@ end)
 
 --Parameters
 --position - table, coordinates of window x, y, dx, dy. for function SetWindowPos
-function LogsToScreen:Init(position)
+--extended - boolean - если Да, то создается расширенная таблица, с полями для счета и бумаги
+function LogsToScreen:Init(position, extended)
 
-  helper = Helper()
-  helper:Init()
+	helper = Helper()
+	helper:Init()
   
-  window = Window()
-  window:Init('LOGS:: '..settings.TableCaption, {'Time_','Message_'}, position)
-  
+	local columns = {}
+	window = Window()
+	if extended ~= nil then
+		if extended == true then
+			columns = {'Time_','Account','Depo','Sec','Class','Message_'}
+		else
+			columns = {'Time_','Message_'}
+		end
+	else
+		columns = {'Time_','Message_'}
+	end
+	if position ~= nil then
+		window:Init('LOGS:: '..settings.TableCaption, columns, position)
+	else
+		window:Init('LOGS:: '..settings.TableCaption, columns)
+	end
  
  --[[ local strTime = os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2())
   helper:AppendInFile(settings.logFile, strTime ..'\n')
@@ -37,3 +51,21 @@ function LogsToScreen:CloseTable()
 	
 end
 
+--выводит информацию в расширенный лог
+function LogsToScreen:add2(account, depo, sec, class, text)
+
+	local timetolog = os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2())
+	
+  --helper:AppendInFile(settings.logFile, os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2()) .. ' ' .. text ..'\n')
+  
+	local rowNum = InsertRow(window.hID, -1)
+		
+	window:SetValueByColName(rowNum, 'Time_',timetolog)
+	window:SetValueByColName(rowNum, 'Account', account)
+	window:SetValueByColName(rowNum, 'Depo', depo)
+	window:SetValueByColName(rowNum, 'Sec', sec)
+	window:SetValueByColName(rowNum, 'Class', class)
+	window:SetValueByColName(rowNum, 'Message_', text)
+
+  
+end
