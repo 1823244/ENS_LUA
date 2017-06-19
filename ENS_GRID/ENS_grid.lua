@@ -358,6 +358,8 @@ function AddRowsToMainWindow()
 		window:SetValueByColName(rowNum, 'MA60name',  List[row][1] ..'_grid_MA60')
 		window:SetValueByColName(rowNum, 'PriceName', List[row][1]..'_grid_price')
 		
+		window:SetValueByColName(rowNum, 'rejim', List[row][5])
+		
 		--чтобы получить номер колонки используем функцию GetColNumberByName()
 		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
 		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
