@@ -84,14 +84,16 @@ function OnInit(path)
 end
 
 --это не обработчик события, а просто функция покупки/продажи
-function BuySell(row, trans_id_p, dir)
+function BuySell(row)
 
-	local SecCodeBox 	= window:GetValueByColName(row, 'Ticker').image
+	local SecCodeBox= window:GetValueByColName(row, 'Ticker').image
 	local ClassCode 	= window:GetValueByColName(row, 'Class').image
 	local ClientBox 	= window:GetValueByColName(row, 'Account').image
-	local DepoBox 		= window:GetValueByColName(row, 'Depo').image
+	local DepoBox 	= window:GetValueByColName(row, 'Depo').image
 	--идентификатор транзакции нужен обязательно, чтобы потом можно было понять, на какую транзакцию пришел ответ
 	local trans_id 		= tonumber(window:GetValueByColName(row, 'trans_id').image)
+	--
+	local dir 			= window:GetValueByColName(row, 'sig_dir').image
 	--количество для заявки берем из "переменной" - поля qty в главной таблице в строке из параметра row
 	local qty 			= tonumber(window:GetValueByColName(row, 'qty').image)
 	
@@ -108,7 +110,7 @@ function BuySell(row, trans_id_p, dir)
 		transactions:orderWithId(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(tonumber(security.last) - 150 * minStepPrice), qty, trans_id)
 	end
 	
-	--очищаем "переменную" (в качестве переменной использовали колонки главной таблицы)
+	--очищаем, т.к. это временно значение
 	window:SetValueByColName(row, 'qty', tostring(0))
 	
 end
@@ -171,12 +173,13 @@ end
 function OnTransReply(trans_reply)
 
 	--logstoscreen:add2(nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds())
-	
+
+	--помещаем номер заявки в таблицу Orders, в строку с текущим trans_id
 	local s = orders:GetSize()
-	--
 	local rowNum=nil
 	for i = 1, s do
-		--здесь придется обойтись без строки в главном окне - row, т.к. его негде получить в контексте этой функции
+		--здесь придется обойтись без строки в главной таблице - row, т.к. в контексте этой функции невозможно понять, по какой строке пришел колбэк
+		--но это не будет проблемой, т.к. trans_id вполне однозначно определяет по какому инструменту ждем ответ
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_reply.trans_id) then
 			orders:SetValue(i, 'order', trans_reply.order_num)
 			--logstoscreen:add2(nil,nil,nil,nil,'OnTransReply - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
@@ -217,6 +220,7 @@ function OnTrade(trade)
 	
 	--logstoscreen:add2(nil,nil,nil,nil,'onTrade '..helper:getMiliSeconds())
 	
+	--добавим количество из сделки в колонку qty_fact главной таблицы
 	local s = orders:GetSize()
 	for i = 1, s do
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trade.trans_id) 
@@ -257,15 +261,15 @@ function OnOrder(order)
 	
 end
 
+local f_cb = function( t_id,  msg,  par1, par2)
+	
 --f_cb – функция обратного вызова для обработки событий в таблице. вызывается из main()
 --(или, другими словами, обработчик клика по таблице робота)
 --параметры:
 --	t_id - хэндл таблицы, полученный функцией AllocTable()
 --	msg - тип события, происшедшего в таблице
 --	par1 и par2 – значения параметров определяются типом сообщения msg, 
---
-local f_cb = function( t_id,  msg,  par1, par2)
-	
+--	
 	--QLUA GetCell
 	--Функция возвращает таблицу, содержащую данные из ячейки в строке с ключом «key», кодом колонки «code» в таблице «t_id». 
 	--Формат вызова: 
@@ -331,7 +335,6 @@ local f_cb = function( t_id,  msg,  par1, par2)
 
 end 
 
-
 --читает из настроек таблицу инструментов и добавляет строки с ними в главную таблицу
 function AddRowsToMainWindow()
 
@@ -394,8 +397,9 @@ function main()
 	--trans_id - число, идентификатор пользовательской транзакции, отправленной программно. по нему фильтруем сделки и заявки при наборе позиции
 	--current_state - текущее состояние по инструменту
 	--signal_id - идентификатор сигнала
+	--savedPosition - число - сюда сохраняем позицию перед отправкой транзакции, а потом в функции ожидания ответа проверяем, поменялось ли это количество
 	
-	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty'})
+	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition'})
 	
 	--создаем вспомогательные таблицы
 ---------------------------------------------------------------------------	
@@ -450,17 +454,18 @@ function Red(t_id, Line, Col)    -- Красный
    if Col == nil then Col = QTABLE_NO_INDEX; end;
    SetColor(t_id, Line, Col, RGB(255,168,164), RGB(0,0,0), RGB(255,168,164), RGB(0,0,0));
 end;
+
 function Gray(Line, Col)   -- Серый
    -- Если индекс столбца не указан, окрашивает всю строку
    if Col == nil then Col = QTABLE_NO_INDEX; end;
    SetColor(t_id, Line, Col, RGB(200,200,200), RGB(0,0,0), RGB(200,200,200), RGB(0,0,0));
 end;
+
 function Green(t_id, Line, Col)  -- Зеленый
    -- Если индекс столбца не указан, окрашивает всю строку
    if Col == nil then Col = QTABLE_NO_INDEX; end;
    SetColor(t_id, Line, Col, RGB(165,227,128), RGB(0,0,0), RGB(165,227,128), RGB(0,0,0));
 end;
-
 
 function createTableSignals()
 	
@@ -472,18 +477,18 @@ function createTableSignals()
 		--message("table with id = " ..signals.t_id .. " created", 1)
 	end
 
-	signals:AddColumn("row", QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
-	signals:AddColumn("id", QTABLE_INT_TYPE, 10)
-	signals:AddColumn("dir", QTABLE_STRING_TYPE, 4)
-	signals:AddColumn("account", QTABLE_STRING_TYPE, 10)
-	signals:AddColumn("depo", QTABLE_STRING_TYPE, 10)
-	signals:AddColumn("sec_code", QTABLE_STRING_TYPE, 10)
-	signals:AddColumn("class_code", QTABLE_STRING_TYPE, 10)
-	signals:AddColumn("date", QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
-	signals:AddColumn("time", QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
-	signals:AddColumn("price", QTABLE_DOUBLE_TYPE, 10)
-	signals:AddColumn("MA", QTABLE_DOUBLE_TYPE, 10)
-	signals:AddColumn("done", QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("row", 		QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	signals:AddColumn("id", 		QTABLE_INT_TYPE, 10)
+	signals:AddColumn("dir", 		QTABLE_CACHED_STRING_TYPE, 4)
+	signals:AddColumn("account", QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("depo", 	QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("sec_code", QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("class_code", QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("date", 	QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
+	signals:AddColumn("time", 		QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
+	signals:AddColumn("price", 	QTABLE_DOUBLE_TYPE, 10)
+	signals:AddColumn("MA",		QTABLE_DOUBLE_TYPE, 10)
+	signals:AddColumn("done", 	QTABLE_STRING_TYPE, 10)
 	
 	signals:SetCaption("Signals")
 	signals:Show()
@@ -502,16 +507,17 @@ function createTableOrders()
 		--message("table with id = " ..orders.t_id .. " created", 1)
 	end
 	
-	orders:AddColumn("row", 		QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	orders:AddColumn("row", 			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
 	orders:AddColumn("signal_id", 	QTABLE_INT_TYPE, 10)
-	orders:AddColumn("account", 	QTABLE_STRING_TYPE, 10)
-	orders:AddColumn("depo", 		QTABLE_STRING_TYPE, 10)
-	orders:AddColumn("sec_code", 	QTABLE_STRING_TYPE, 10)
-	orders:AddColumn("class_code", 	QTABLE_STRING_TYPE, 10)
+	orders:AddColumn("sig_dir", 		QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("account", 	QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("depo", 			QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("sec_code", 	QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("class_code", QTABLE_CACHED_STRING_TYPE, 10)
 	orders:AddColumn("trans_id", 	QTABLE_INT_TYPE, 10)
 	orders:AddColumn("order", 		QTABLE_INT_TYPE, 10)
 	orders:AddColumn("trade", 		QTABLE_INT_TYPE, 10)
-	orders:AddColumn("qty", 		QTABLE_INT_TYPE, 10) --количество из заявки
+	orders:AddColumn("qty", 			QTABLE_INT_TYPE, 10) --количество из заявки
 	orders:AddColumn("qty_fact", 	QTABLE_INT_TYPE, 10) --количество из сделок
 	
 	orders:SetCaption("orders")
@@ -520,7 +526,6 @@ function createTableOrders()
 	return true
 	
 end
-
 
 --+-----------------------------------------------
 --|			ОСНОВНОЙ АЛГОРИТМ
@@ -676,6 +681,7 @@ function processSignal(row)
 			--переходим к ожиданию нового сигнала
 			 
 			window:SetValueByColName(row, 'current_state', 'waiting for a signal')
+			window:SetValueByColName(row, 'sig_dir', '')
 			return
 		end
 		
@@ -697,20 +703,23 @@ function processSignal(row)
 		
 		--для визуального контроля пишем информацию о заявке во вспомогательную таблицу
 		local newR = orders:AddLine()
-		orders:SetValue(newR, "row", row)
-		orders:SetValue(newR, "trans_id", trans_id)
-		orders:SetValue(newR, "signal_id", signal_id)
-		orders:SetValue(newR, "qty", qty)
-		orders:SetValue(newR, "sec_code", window:GetValueByColName(row, 'Ticker').image)
-		orders:SetValue(newR, "class_code", window:GetValueByColName(row, 'Class').image)
-		orders:SetValue(newR, "account", window:GetValueByColName(row, 'Account').image)
-		orders:SetValue(newR, "depo", window:GetValueByColName(row, 'Depo').image)
+		orders:SetValue(newR, "row", 			row)
+		orders:SetValue(newR, "trans_id", 		trans_id)
+		orders:SetValue(newR, "signal_id", 		signal_id)
+		orders:SetValue(newR, "sig_dir", 		signal_direction)
+		orders:SetValue(newR, "qty", 			qty)	--количество в заявке, потом будем сравнивать с ним количество из колонки qty_fact
+		orders:SetValue(newR, "sec_code", 	window:GetValueByColName(row, 'Ticker').image)
+		orders:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
+		orders:SetValue(newR, "account", 		window:GetValueByColName(row, 'Account').image)
+		orders:SetValue(newR, "depo", 			window:GetValueByColName(row, 'Depo').image)
+		
+		--сохраним "старую" позицию
+		window:SetValueByColName(row, 'savedPosition', tostring(factQuantity))
 		
 		--универсальная функция покупки/продажи
-		BuySell(row, trans_id, signal_direction)
+		BuySell(row)
 		
-		
-		--после отправки транзакции на биржу меняем состояние робота на то, в котором робот ждет ответа на выставленную заявку
+		--после отправки транзакции на биржу меняем состояние робота на то, в котором он ждет ответа на выставленную заявку
 		window:SetValueByColName(row, 'current_state', 'waiting for a response')
 
 	else
@@ -742,6 +751,8 @@ end
 function wait_for_response(row)
 	--logstoscreen:add2(nil,nil,nil,nil,'we are waiting the result of sending order')
 
+	---[[
+	
 	local s = orders:GetSize()
 	for i = 1, s do
 		
@@ -750,13 +761,13 @@ function wait_for_response(row)
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_id)
 			and tonumber(orders:GetValue(i, 'row').image) == row then
 			
-			if orders:GetValue(i, 'trade')~=nil and( orders:GetValue(i, 'trade').image~='0' or orders:GetValue(i, 'trade').image~='') then
+			if orders:GetValue(i, 'trade')~=nil and ( orders:GetValue(i, 'trade').image~='0' and orders:GetValue(i, 'trade').image~='' and orders:GetValue(i, 'trade').image~='nil') then
 				--если в таблице orders появился номер сделки, это значит что заявка обработалась.
 				
 				--а вот и не факт. нужно сравнить количество в заявке и в сделке. если заявка полностью удовлетворена, то только тогда это значит, что она обработалась
 				--хотя для объемов в 10 лотов наверное любой фьючерс будет ликвидным...
 				
-				--пока не будут завязываться на это. просто выведу в лог
+				--чтобы гарантированно получить число, приходится писать вот такие обводные конструкции
 				local qty_fact = orders:GetValue(i, 'qty_fact').image
 				if qty_fact == nil or qty_fact == '' then
 					qty_fact = 0
@@ -764,20 +775,40 @@ function wait_for_response(row)
 					qty_fact = tonumber(qty_fact)
 				end
 			
-				if tonumber(orders:GetValue(i, 'qty').image) == qty_fact then
+				--чтобы гарантированно получить число, приходится писать вот такие обводные конструкции
+				local qty = orders:GetValue(i, 'qty').image
+				if qty == nil or qty == '' then
+					qty = 0
+				else
+					qty = tonumber(qty)
+				end
+				
+				--сравниваем количество, которое отправили в заявке (qty) и количество, которое пришло в ответ в сделках (qty_fact)
+				if qty_fact >= qty then
 					
-					--logstoscreen:add2(nil,nil,nil,nil,'order '..orders:GetValue(i, 'order').image..': qty = qty_fact - order is processed')
+					logstoscreen:add2(nil,nil,nil,nil,'order '..orders:GetValue(i, 'order').image..': qty_fact >= qty. Order is processed!')
+					
+				end
+
+				--проверяем позицию. это нужно делать независимо от обновления таблицы orders
+				--пока позиция не изменилась относительно сохраненного перед отправкой транзакции количество - состояние робота не меняем
+				
+				local curPosition = trader:GetCurrentPosition(window:GetValueByColName(row, 'Ticker').image, window:GetValueByColName(row, 'Account').image, window:GetValueByColName(row, 'Class').image)
+				local savedPosition = tonumber(window:GetValueByColName(row, 'savedPosition').image)
+				
+				--доделать. нужно добавить счетчик безопасного выполнения, чтобы в бесконечный цикл не уйти
+				if curPosition ~= savedPosition then
+					
+					--переключаем состояние робота по данному инструменту - снова переходим к обработке сигнала, т.к. проверка позиции делается там
+					window:SetValueByColName(row, 'current_state', 'processing signal')
+					window:SetValueByColName(row, 'savedPosition', tostring(curPosition))--хотя это можно не делать, все равно в processSignal() обновится
 					
 				end
 				
-				--logstoscreen:add2(nil,nil,nil,nil,'order '..orders:GetValue(i, 'order').image..' processed')
-				
-				window:SetValueByColName(row, 'current_state', 'processing signal')
-				
-			
 			end
 		end
 	end
+	--]]
 		
 end
 
@@ -834,10 +865,8 @@ function wait_for_signal(row)
 	signals:SetValue(newR, "account", 	window:GetValueByColName(row, 'Account').image)
 	signals:SetValue(newR, "depo", 	window:GetValueByColName(row, 'Depo').image)
 
-
 	signals:SetValue(newR, "sec_code", 	window:GetValueByColName(row, 'Ticker').image)
 	signals:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
-	--signals:SetValue(newR, "dir", 	sig_dir)
 	
 	signals:SetValue(newR, "date", candle_date)
 	signals:SetValue(newR, "time", 	candle_time) 
@@ -853,7 +882,12 @@ end
 
 --[[ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
 сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
-т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю следующую свечу--]]
+т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю эту свечу.
+Есть один баг. Если робота перезапустить во время жизни свечи, на которой возник сигнал, то он опять увидит этот сигнал
+и попробует вставить в позицию. Если позиция уже была сформирована до перезапуска, то ничего страшного, 
+сработает проверка plan-fact и не позволит увеличить позу.
+
+--]]
 function find_signal(row, candle_date, candle_time)
 	local rows=0
 	local cols=0
@@ -869,6 +903,7 @@ function find_signal(row, candle_date, candle_time)
 	end
 	return false
 end
+
 --+-----------------------------------------------
 --|			ОСНОВНОЙ АЛГОРИТМ - КОНЕЦ
 --+-----------------------------------------------
