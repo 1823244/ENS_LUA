@@ -78,7 +78,7 @@ function OnInit(path)
 	transactions:Init()
 	
   	logstoscreen = LogsToScreen()
-	local position = {x=300,y=10,dx=500,dy=400}
+	local position = {x=810,y=420,dx=700,dy=300}
 	local extended = true--флаг расширенной таблицы лога
 	logstoscreen:Init(position, extended) 	
 end
@@ -160,19 +160,36 @@ function StopScript()
 end
 
 --рефакторинг. запуск в работу одного инструмента
+--[[
 function StartRow(r, c)
 
 	Red(window.hID, r, c)
-	SetCell(window.hID, r, c, 'Stop')
+	SetCell(window.hID, r, c, 'stop')
 	window:SetValueByColName(r, 'current_state', 'waiting for a signal')
+	
+end
+--]]
 
+--рефакторинг. запуск в работу одного инструмента
+function StartStopRow(row)
+
+	local col = window:GetColNumberByName('StartStop')
+	if window:GetValueByColName(row, 'StartStop').image == 'start' then
+		Red(window.hID, row, col)
+		SetCell(window.hID, row, col, 'stop')
+		window:SetValueByColName(row, 'current_state', 'waiting for a signal')
+	else
+		Green(window.hID, row, col)
+		SetCell(window.hID, row, col, 'start')
+		window:SetValueByColName(row, 'current_state', '')
+	end
 end
 
 
 --событие, возникающее после отправки заявки на сервер
 function OnTransReply(trans_reply)
 
-	--logstoscreen:add2(nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds())
+	--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds())
 
 	--помещаем номер заявки в таблицу Orders, в строку с текущим trans_id
 	local s = orders:GetSize()
@@ -182,19 +199,19 @@ function OnTransReply(trans_reply)
 		--но это не будет проблемой, т.к. trans_id вполне однозначно определяет по какому инструменту ждем ответ
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_reply.trans_id) then
 			orders:SetValue(i, 'order', trans_reply.order_num)
-			--logstoscreen:add2(nil,nil,nil,nil,'OnTransReply - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
+			--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTransReply - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
 			rowNum=tonumber(orders:GetValue(i, 'row').image)
 			break
 		end
 	end
 	
 	if trans_reply.status > 3 then
-		logstoscreen:add2(nil,nil,nil,nil,'error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
 		message('error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
 		
 		--выключаем инструмент, по которому пришла ошибка
 		if rowNum~=nil then
-			window:SetValueByColName(rowNum, 'StartStop', 'Start')--turn off
+			window:SetValueByColName(rowNum, 'StartStop', 'start')--turn off
 			window:SetValueByColName(rowNum, 'current_state', '')--turn off
 		end
 	end
@@ -218,7 +235,7 @@ function OnTrade(trade)
 	end
 		
 	
-	--logstoscreen:add2(nil,nil,nil,nil,'onTrade '..helper:getMiliSeconds())
+	--logstoscreen:add2(window, row, nil,nil,nil,nil,'onTrade '..helper:getMiliSeconds())
 	
 	--добавим количество из сделки в колонку qty_fact главной таблицы
 	local s = orders:GetSize()
@@ -233,7 +250,7 @@ function OnTrade(trade)
 				qty_fact = tonumber(qty_fact)
 			end
 			orders:SetValue(i, 'qty_fact', qty_fact + tonumber(trade.qty))
-			--logstoscreen:add2(nil,nil,nil,nil,'OnTrade - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
+			--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTrade - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
 			break
 		end
 	end
@@ -256,7 +273,7 @@ function OnOrder(order)
 		processed_orders[#processed_orders+1] = order.order_num
 	end
 	
-	--logstoscreen:add2(nil,nil,nil,nil,'onOrder '..helper:getMiliSeconds())
+	--logstoscreen:add2(window, row, nil,nil,nil,nil,'onOrder '..helper:getMiliSeconds())
 
 	
 end
@@ -287,15 +304,18 @@ local f_cb = function( t_id,  msg,  par1, par2)
 	if x~=nil then
 		if (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('StartStop') then
 			--message("Start",1)
-			if x["image"]=="Start" then
-				StartRow(par1, par2)
+			if x["image"]=="start" then
+				--StartRow(par1, par2)
+				StartStopRow(par1)
 				
 			else
 				--Stop but not closed
+				StartStopRow(par1)
+				--[[
 				Green(window.hID, par1, par2)
-				SetCell(window.hID, par1, par2, 'Start')
+				SetCell(window.hID, par1, par2, 'start')
 				window:SetValueByColName(par1, 'current_state', nil)
-				
+				--]]
 			end
 		elseif (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('BuyMarket') then
 			--message('buy')
@@ -351,7 +371,15 @@ function AddRowsToMainWindow()
 		window:SetValueByColName(rowNum, 'Ticker', List[row][3]) --код бумаги
 		window:SetValueByColName(rowNum, 'Class', List[row][6]) --класс бумаги
 		window:SetValueByColName(rowNum, 'Lot', List[row][4]) --размер лота для торговли
+		--здесь наоборот надо, если в настройках start, то нужно запустить робота, а в поле StartStop поместить действие stop
 		window:SetValueByColName(rowNum, 'StartStop', List[row][9])
+		--[[
+		if List[row][9] == 'start' then
+			window:SetValueByColName(rowNum, 'StartStop', 'stop')
+		else
+			window:SetValueByColName(rowNum, 'StartStop', 'start')
+		end
+		--]]
 		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
 		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
 		
@@ -375,6 +403,10 @@ end
 --главная функция робота, которая гоняется в цикле
 function main()
 
+	if settings.invert_deals == true then
+		message('включено инвертирование сделок!!! все позиции в этом режиме по-умолчанию выключены!',3)
+		logstoscreen:add2(window, nil, nil,nil,nil,nil,'включено инвертирование сделок!!! все позиции выключены!')
+	end
 	--создаем окно робота с таблицей и добавляем в эту таблицу строки
 	window = Window()									--функция Window() расположена в файле Window.luac и создает класс
 	
@@ -400,8 +432,8 @@ function main()
 	--current_state - текущее состояние по инструменту
 	--signal_id - идентификатор сигнала
 	--savedPosition - число - сюда сохраняем позицию перед отправкой транзакции, а потом в функции ожидания ответа проверяем, поменялось ли это количество
-	
-	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition'})
+	local position = {x=50,y=105,dx=1300,dy=400}
+	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition'}, position)
 	
 	--создаем вспомогательные таблицы
 ---------------------------------------------------------------------------	
@@ -409,14 +441,14 @@ function main()
 		return
 	end
 
-	SetWindowPos(signals.t_id, 810, 10, 600, 200)
+	SetWindowPos(signals.t_id, 810, 10, 700, 200)
 
 ---------------------------------------------------------------------------	
 	if createTableOrders() == false then
 		return
 	end	
 	
-	
+	SetWindowPos(orders.t_id, 810, 210, 700, 200)
 	
 		
 	
@@ -433,7 +465,17 @@ function main()
 	--запускаем все согласно настроек	
 	local col = window:GetColNumberByName('StartStop')
 	for row=1, GetTableSize(window.hID) do
-		StartRow(row, col)
+		if settings.invert_deals == true then
+			window:SetValueByColName(row, 'StartStop', 'stop')
+		end
+		StartStopRow(row)
+		--[[
+		if window:GetValueByColName(row, 'StartStop').image == 'start' then
+			StartRow(row, col)
+		else
+			window:SetValueByColName(row, 'StartStop', 'start')
+		end
+		--]]
 	end
 	
 
@@ -600,7 +642,7 @@ function main_loop(row)
 	
 	local working = window:GetValueByColName(row, 'StartStop').image 
 	
-	if working=='Start'  then --инструмент выключен. когда включен, там будет Stop
+	if working=='start'  then --инструмент выключен. когда включен, там будет Stop
 		return
 	end
 		
@@ -635,18 +677,18 @@ function processSignal(row)
 	
 	local signal_direction = window:GetValueByColName(row, 'sig_dir').image
 	
-	logstoscreen:add2(nil,nil,nil,nil,'processing signal: '..signal_direction)
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'processing signal: '..signal_direction)
 	
 	if signal_direction == 'sell' then
 		planQuantity = -1*planQuantity --сделаем отрицательным
 	end
 	
-	logstoscreen:add2(nil,nil,nil,nil,'plan quantity: ' .. tostring(planQuantity))
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'plan quantity: ' .. tostring(planQuantity))
 	
 	--посмотреть, сколько уже лотов/контрактов есть в позиции (валюту для СЭЛТ пока оставим пустой, главное - сделать базовый функционал)
 	local factQuantity = trader:GetCurrentPosition(window:GetValueByColName(row, 'Ticker').image, window:GetValueByColName(row, 'Account').image, window:GetValueByColName(row, 'Class').image)
 	
-	logstoscreen:add2(nil,nil,nil,nil,'fact quantity: ' .. tostring(factQuantity))
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'fact quantity: ' .. tostring(factQuantity))
 	
 	if window:GetValueByColName(row, 'rejim').image == 'revers' then
 		--все разрешено
@@ -679,7 +721,7 @@ function processSignal(row)
 		local qty = planQuantity - factQuantity
 		
 		if qty == 0 then
-			logstoscreen:add2(nil,nil,nil,nil,'ОШИБКА! qty = 0')
+			logstoscreen:add2(window, row, nil,nil,nil,nil,'ОШИБКА! qty = 0')
 			--переходим к ожиданию нового сигнала
 			 
 			window:SetValueByColName(row, 'current_state', 'waiting for a signal')
@@ -694,7 +736,7 @@ function processSignal(row)
 		end
 		
 		
-		logstoscreen:add2(nil,nil,nil,nil,'qty: ' .. tostring(qty))
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'qty: ' .. tostring(qty))
 		
 		
 		--!!!!!!!!!!!!для отладки. хочу проверить как будет отрабатывать ожидание добора позиции 
@@ -725,7 +767,7 @@ function processSignal(row)
 		window:SetValueByColName(row, 'current_state', 'waiting for a response')
 
 	else
-		--logstoscreen:add2(nil,nil,nil,nil,'вся позиция уже набрана, заявка не отправлена!')
+		--logstoscreen:add2(window, row, nil,nil,nil,nil,'вся позиция уже набрана, заявка не отправлена!')
 		
 		window:SetValueByColName(row, 'current_state', 'waiting for a signal')
 		
@@ -751,7 +793,7 @@ end
 
 --ждать ответа на отправленную заявку
 function wait_for_response(row)
-	--logstoscreen:add2(nil,nil,nil,nil,'we are waiting the result of sending order')
+	--logstoscreen:add2(window, row, nil,nil,nil,nil,'we are waiting the result of sending order')
 
 	---[[
 	
@@ -788,7 +830,7 @@ function wait_for_response(row)
 				--сравниваем количество, которое отправили в заявке (qty) и количество, которое пришло в ответ в сделках (qty_fact)
 				if qty_fact >= qty then
 					
-					logstoscreen:add2(nil,nil,nil,nil,'order '..orders:GetValue(i, 'order').image..': qty_fact >= qty. Order is processed!')
+					logstoscreen:add2(window, row, nil,nil,nil,nil,'order '..orders:GetValue(i, 'order').image..': qty_fact >= qty. Order is processed!')
 					
 				end
 
@@ -836,20 +878,28 @@ function wait_for_signal(row)
 
 	--проверка наличия сигнала, чтобы не обрабатывать повторно
 	if find_signal(row, candle_date, candle_time) == true then
-		--logstoscreen:add2(nil,nil,nil,nil,'signal '..candle_date..' '..candle_time..' is already processed')
+		--logstoscreen:add2(window, row, nil,nil,nil,nil,'signal '..candle_date..' '..candle_time..' is already processed')
 		return
 	end
 		
-	--logstoscreen:add2(nil,nil,nil,nil,'we have got a signal: ')
+	--logstoscreen:add2(window, row, nil,nil,nil,nil,'we have got a signal: ')
 	
 	local sig_dir = nil
 	if signal_buy == true then 
 		--закрытие свечи выше средней - покупка
-		sig_dir='buy'
+		if settings.invert_deals == false then
+			sig_dir='buy'
+		else
+			sig_dir='sell'
+		end
 		
 	elseif signal_sell == true	then 
 		--закрытие часовика ниже средней - продажа
-		sig_dir='sell'
+		if settings.invert_deals == false then
+			sig_dir='sell'
+		else
+			sig_dir='buy'
+		end
 		
 	end
 	
@@ -899,7 +949,7 @@ function find_signal(row, candle_date, candle_time)
 			signals:GetValue(i, "date").image == candle_date and
 			signals:GetValue(i, "time").image == candle_time then
 			--уже есть сигнал, повторно обрабатывать не надо
-			--logstoscreen:add2(nil,nil,nil,nil,'the signal is already processed: '..tostring(signals:GetValue(i, "id").image))
+			--logstoscreen:add2(window, row, nil,nil,nil,nil,'the signal is already processed: '..tostring(signals:GetValue(i, "id").image))
 			return true
 		end
 	end

@@ -52,11 +52,20 @@ function LogsToScreen:CloseTable()
 end
 
 --выводит информацию в расширенный лог
-function LogsToScreen:add2(account, depo, sec, class, text)
+--window - класс с главной таблицей
+--row - число, номер строки в главной таблице
+function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
 
 	local timetolog = os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2())
 	
   --helper:AppendInFile(settings.logFile, os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2()) .. ' ' .. text ..'\n')
+
+	if main_window~=nil and row~=nil then
+		sec 	= main_window:GetValueByColName(row, 'Ticker').image
+		class 	= main_window:GetValueByColName(row, 'Class').image
+		account = main_window:GetValueByColName(row, 'Account').image
+		depo 	= main_window:GetValueByColName(row, 'Depo').image
+	end
   
 	local rowNum = InsertRow(window.hID, -1)
 		

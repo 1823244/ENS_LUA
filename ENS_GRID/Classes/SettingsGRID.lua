@@ -20,21 +20,10 @@ function Settings:Init()
 end
 
 function Settings:Load(path)
-  self.DepoBox = '41105E5'
-  self.ClientBox = '41105E5'
-  self.ClassCode = 'SPBFUT'
- 
-  
-  self.LotSizeBox 	= '2'
-  self.TypeLimitCombo = 'T0'
-  self.IdPriceCombo = 'MXI_price_60h' 	--идентификатор графика
-  self.IdMA 		= 'MXI_MA_60h'		--идентификатор графика. 60 часов
-  
-  self.TableCaption = 'ENS OLE LUA - GRID all Futures'
-  self.rejim 		= 'revers'
-  self.Path 		= path
-  
-  self.logFile = getScriptPath()..'\\log.txt'
+
+	
+	self.invert_deals = false --режим для убыточных трейдеров :) если Истина - открывает сделки в сторону, противоположную сигналу
+	self.logFile = getScriptPath()..'\\log.txt'
   
 
 end
@@ -109,7 +98,7 @@ function Settings:instruments_list()
 	row, secList = addOneInstrumentToTable(row, {'URKA','UK', 'UKU7',2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --URKA
     
     --валюты
-	row, secList = addOneInstrumentToTable(row, {'USD','', 'USD000UTSTOM', 2, 'revers', 'CETS', '11267', 'MB1000100002', 'start'}, secList)
+	row, secList = addOneInstrumentToTable(row, {'USD',  '' , 'USD000UTSTOM', 2, 'revers', 'CETS', '11267', 'MB1000100002', 'stop'}, secList)
     
     --акции на споте
 	row, secList = addOneInstrumentToTable(row, {'GAZPROM',	'', 'GAZP', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
