@@ -468,7 +468,9 @@ function main()
 		if settings.invert_deals == true then
 			window:SetValueByColName(row, 'StartStop', 'stop')
 		end
-		StartStopRow(row)
+		if settings.start_all == true then
+			StartStopRow(row)
+		end
 		--[[
 		if window:GetValueByColName(row, 'StartStop').image == 'start' then
 			StartRow(row, col)

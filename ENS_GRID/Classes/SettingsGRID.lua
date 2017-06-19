@@ -25,6 +25,7 @@ function Settings:Load(path)
 	self.invert_deals = false --режим для убыточных трейдеров :) если Истина - открывает сделки в сторону, противоположную сигналу
 	self.logFile = getScriptPath()..'\\log.txt'
   
+	self.start_all = true--если в настройках строки будет 'start' (в функции Settings:instruments_list()), то она будет включена при запуске
 
 end
 
