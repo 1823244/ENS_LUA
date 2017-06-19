@@ -125,8 +125,8 @@ function Settings:instruments_list()
 	row, secList = addOneInstrumentToTable(row, {'MOEXSPOT','', 'MOEX', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'SURGUT',	'', 'SNGS', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'YANDEX',	'', 'YNDX', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
-	row, secList = addOneInstrumentToTable(row, {'VTB',		'', 'VTBR', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
-	row, secList = addOneInstrumentToTable(row, {'MTS',		'', 'MTSS', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
+	row, secList = addOneInstrumentToTable(row, {'VTB',		'', 'VTBR', 10, 'long', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
+	row, secList = addOneInstrumentToTable(row, {'MTS',		'', 'MTSS', 10, 'long', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 
 	
 	
