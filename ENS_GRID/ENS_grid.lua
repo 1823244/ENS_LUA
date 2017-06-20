@@ -465,9 +465,11 @@ function main()
 	--запускаем все согласно настроек	
 	local col = window:GetColNumberByName('StartStop')
 	for row=1, GetTableSize(window.hID) do
+		--[[
 		if settings.invert_deals == true then
 			window:SetValueByColName(row, 'StartStop', 'stop')
 		end
+		--]]
 		if settings.start_all == true then
 			StartStopRow(row)
 		end

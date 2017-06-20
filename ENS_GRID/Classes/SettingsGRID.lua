@@ -11,21 +11,25 @@ function Settings:Init()
   self.IdPriceCombo = ""
   self.IdMA = ""
   self.logFile = ""
+  self.invert_deals = nil
+  self.start_all = nil
   
   self.Path = ""
   self.TableCaption=""
   self.rejim=""
   helper = Helper()
   helper:Init()
+  
+  
 end
 
 function Settings:Load(path)
 
-	
-	self.invert_deals = false --режим для убыточных трейдеров :) если Истина - открывает сделки в сторону, противоположную сигналу
+	self.invert_deals = true --режим для убыточных трейдеров :) если Истина - открывает сделки в сторону, противоположную сигналу
 	self.logFile = getScriptPath()..'\\log.txt'
   
 	self.start_all = true--если в настройках строки будет 'start' (в функции Settings:instruments_list()), то она будет включена при запуске
+
 
 end
 
