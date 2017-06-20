@@ -25,7 +25,7 @@ end
 
 function Settings:Load(path)
 
-	self.invert_deals = true --режим дл€ убыточных трейдеров :) если »стина - открывает сделки в сторону, противоположную сигналу
+	self.invert_deals = false --режим дл€ убыточных трейдеров :) если »стина - открывает сделки в сторону, противоположную сигналу
 	self.logFile = getScriptPath()..'\\log.txt'
   
 	self.start_all = true--если в настройках строки будет 'start' (в функции Settings:instruments_list()), то она будет включена при запуске
@@ -65,9 +65,10 @@ function Settings:instruments_list()
 	row, secList = addOneInstrumentToTable(row, {'GBPU','GU', 'GUU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --GBP/USD GBPU
 	row, secList = addOneInstrumentToTable(row, {'AUDU','AU', 'AUU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --AUD/USD AUDU
 	row, secList = addOneInstrumentToTable(row, {'UCAD','CA', 'CAU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --USD/CAD UCAD
-	row, secList = addOneInstrumentToTable(row, {'UCHF','CF', 'CFU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --USD/CHF UCHF
-	row, secList = addOneInstrumentToTable(row, {'UTRY','TR', 'TRU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --USD/TRY UTRY
-	row, secList = addOneInstrumentToTable(row, {'UUAH','UH', 'UHU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --USD/UAH UUAH гривна
+	--в следующих трех движений нет вообще!!!
+	--row, secList = addOneInstrumentToTable(row, {'UCHF','CF', 'CFU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --USD/CHF UCHF
+	--row, secList = addOneInstrumentToTable(row, {'UTRY','TR', 'TRU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --USD/TRY UTRY
+	--row, secList = addOneInstrumentToTable(row, {'UUAH','UH', 'UHU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --USD/UAH UUAH гривна
 
 	--комоды
 	--brent надо обновл€ть каждый мес€ц
@@ -100,7 +101,7 @@ function Settings:instruments_list()
 	row, secList = addOneInstrumentToTable(row, {'CHMF','CH', 'CHU7',2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --CHMF --северсталь
 	row, secList = addOneInstrumentToTable(row, {'TRNF','TN', 'TNU7',2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --TRNF
 	row, secList = addOneInstrumentToTable(row, {'NOTK','NK', 'NKU7',2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --NOTK --новатэк
-	row, secList = addOneInstrumentToTable(row, {'URKA','UK', 'UKU7',2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList) --URKA
+
     
     --валюты
 	row, secList = addOneInstrumentToTable(row, {'USD',  '' , 'USD000UTSTOM', 2, 'revers', 'CETS', '11267', 'MB1000100002', 'stop'}, secList)

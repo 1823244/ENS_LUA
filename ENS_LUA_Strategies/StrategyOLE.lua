@@ -162,9 +162,13 @@ end
 
 --вызывается из этого же файла. Strategy:DoBisness()
 function Strategy:CalcLevels()
-  self.CurClose = tonumber(self.PriceSeries[0].close)
-  self.Ma1 = self.Ma1Series[1].close						--предыдущая свеча
-  self.Ma1Pred = self.Ma1Series[0].close 	--ENS		--предпредыдущая свеча
+	--self.CurClose = tonumber(self.PriceSeries[0].close)
+	if self.Ma1Series[1] ~= nil then
+		self.Ma1 = self.Ma1Series[1].close						--предыдущая свеча
+	end
+	if self.Ma1Series[0] ~= nil then
+		self.Ma1Pred = self.Ma1Series[0].close 	--ENS		--предпредыдущая свеча
+	end
 end
 
 --********************************************************************************
