@@ -206,7 +206,7 @@ function OnTransReply(trans_reply)
 	end
 	
 	if trans_reply.status > 3 then
-		logstoscreen:add2(window, row, nil,nil,nil,nil,'error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'error code: '..tostring(trans_reply.status))
 		message('error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
 		
 		--выключаем инструмент, по которому пришла ошибка
@@ -365,14 +365,14 @@ function AddRowsToMainWindow()
 		
 		rowNum = InsertRow(window.hID, -1)
 		
-		window:SetValueByColName(rowNum, 'Account', List[row][7])
-		window:SetValueByColName(rowNum, 'Depo', List[row][8])
-		window:SetValueByColName(rowNum, 'Name', List[row][1]) 
-		window:SetValueByColName(rowNum, 'Ticker', List[row][3]) --код бумаги
-		window:SetValueByColName(rowNum, 'Class', List[row][6]) --класс бумаги
-		window:SetValueByColName(rowNum, 'Lot', List[row][4]) --размер лота для торговли
+		window:SetValueByColName(rowNum, 'Account', 	List[row][7])
+		window:SetValueByColName(rowNum, 'Depo', 		List[row][8])
+		window:SetValueByColName(rowNum, 'Name', 		List[row][1]) 
+		window:SetValueByColName(rowNum, 'Ticker', 		List[row][3]) --код бумаги
+		window:SetValueByColName(rowNum, 'Class', 		List[row][6]) --класс бумаги
+		window:SetValueByColName(rowNum, 'Lot', 		List[row][4]) --размер лота для торговли
 		--здесь наоборот надо, если в настройках start, то нужно запустить робота, а в поле StartStop поместить действие stop
-		window:SetValueByColName(rowNum, 'StartStop', List[row][9])
+		window:SetValueByColName(rowNum, 'StartStop', 	List[row][9])
 		--[[
 		if List[row][9] == 'start' then
 			window:SetValueByColName(rowNum, 'StartStop', 'stop')
@@ -383,17 +383,17 @@ function AddRowsToMainWindow()
 		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
 		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
 		
-		window:SetValueByColName(rowNum, 'MA60name',  List[row][1] ..'_grid_MA60')
-		window:SetValueByColName(rowNum, 'PriceName', List[row][1]..'_grid_price')
+		window:SetValueByColName(rowNum, 'MA60name',  	List[row][1] ..'_grid_MA60')
+		window:SetValueByColName(rowNum, 'PriceName', 	List[row][1]..'_grid_price')
 		
-		window:SetValueByColName(rowNum, 'rejim', List[row][5])
+		window:SetValueByColName(rowNum, 'rejim', 		List[row][5])
 		
 		--чтобы получить номер колонки используем функцию GetColNumberByName()
-		Green(window.hID, rowNum, window:GetColNumberByName('StartStop')) 
+		
 		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
 		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
 		
-		local minStepPrice = getParamEx(List[row][6], List[row][3], "SEC_PRICE_STEP").param_value + 0
+		local minStepPrice = getParamEx(List[row][6], 	List[row][3], "SEC_PRICE_STEP").param_value + 0
 		window:SetValueByColName(rowNum, 'minStepPrice', tostring(minStepPrice))
 		
 	end  
@@ -404,8 +404,8 @@ end
 function main()
 
 	if settings.invert_deals == true then
-		message('включено инвертирование сделок!!! все позиции в этом режиме по-умолчанию выключены!',3)
-		logstoscreen:add2(window, nil, nil,nil,nil,nil,'включено инвертирование сделок!!! все позиции выключены!')
+		message('включено инвертирование сделок!!!',3)
+		logstoscreen:add2(window, nil, nil,nil,nil,nil,'включено инвертирование сделок!!!')
 	end
 	--создаем окно робота с таблицей и добавляем в эту таблицу строки
 	window = Window()									--функция Window() расположена в файле Window.luac и создает класс
@@ -454,8 +454,7 @@ function main()
 	
 	--НАСТРОЙКИ ПОКА ЗАДАЮТСЯ ЗДЕСЬ!!!!
 	
-	--фьючерсы  (индексы, валюты, комоды)
-	
+	--добавляем строки с инструментами в главную таблицу
 	AddRowsToMainWindow()
 
 	
@@ -465,21 +464,9 @@ function main()
 	--запускаем все согласно настроек	
 	local col = window:GetColNumberByName('StartStop')
 	for row=1, GetTableSize(window.hID) do
-		--[[
-		if settings.invert_deals == true then
-			window:SetValueByColName(row, 'StartStop', 'stop')
-		end
-		--]]
 		if settings.start_all == true then
 			StartStopRow(row)
 		end
-		--[[
-		if window:GetValueByColName(row, 'StartStop').image == 'start' then
-			StartRow(row, col)
-		else
-			window:SetValueByColName(row, 'StartStop', 'start')
-		end
-		--]]
 	end
 	
 
@@ -528,15 +515,15 @@ function createTableSignals()
 	signals:AddColumn("row", 		QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
 	signals:AddColumn("id", 		QTABLE_INT_TYPE, 10)
 	signals:AddColumn("dir", 		QTABLE_CACHED_STRING_TYPE, 4)
-	signals:AddColumn("account", QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("depo", 	QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("sec_code", QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("account", 	QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("depo", 		QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("sec_code", 	QTABLE_CACHED_STRING_TYPE, 10)
 	signals:AddColumn("class_code", QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("date", 	QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
+	signals:AddColumn("date", 		QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
 	signals:AddColumn("time", 		QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
-	signals:AddColumn("price", 	QTABLE_DOUBLE_TYPE, 10)
-	signals:AddColumn("MA",		QTABLE_DOUBLE_TYPE, 10)
-	signals:AddColumn("done", 	QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("price", 		QTABLE_DOUBLE_TYPE, 10)
+	signals:AddColumn("MA",			QTABLE_DOUBLE_TYPE, 10)
+	signals:AddColumn("done", 		QTABLE_STRING_TYPE, 10)
 	
 	signals:SetCaption("Signals")
 	signals:Show()
@@ -555,17 +542,17 @@ function createTableOrders()
 		--message("table with id = " ..orders.t_id .. " created", 1)
 	end
 	
-	orders:AddColumn("row", 			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	orders:AddColumn("row", 		QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
 	orders:AddColumn("signal_id", 	QTABLE_INT_TYPE, 10)
-	orders:AddColumn("sig_dir", 		QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("sig_dir", 	QTABLE_CACHED_STRING_TYPE, 10)
 	orders:AddColumn("account", 	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("depo", 			QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("depo", 		QTABLE_CACHED_STRING_TYPE, 10)
 	orders:AddColumn("sec_code", 	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("class_code", QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("class_code", 	QTABLE_CACHED_STRING_TYPE, 10)
 	orders:AddColumn("trans_id", 	QTABLE_INT_TYPE, 10)
 	orders:AddColumn("order", 		QTABLE_INT_TYPE, 10)
 	orders:AddColumn("trade", 		QTABLE_INT_TYPE, 10)
-	orders:AddColumn("qty", 			QTABLE_INT_TYPE, 10) --количество из заявки
+	orders:AddColumn("qty", 		QTABLE_INT_TYPE, 10) --количество из заявки
 	orders:AddColumn("qty_fact", 	QTABLE_INT_TYPE, 10) --количество из сделок
 	
 	orders:SetCaption("orders")
