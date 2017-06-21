@@ -78,9 +78,9 @@ function OnInit(path)
 	transactions:Init()
 	
   	logstoscreen = LogsToScreen()
-	local position = {x=810,y=420,dx=700,dy=300}
+	
 	local extended = true--флаг расширенной таблицы лога
-	logstoscreen:Init(position, extended) 	
+	logstoscreen:Init(settings.log_position, extended) 	
 end
 
 --это не обработчик события, а просто функция покупки/продажи
@@ -109,6 +109,8 @@ function BuySell(row)
 	elseif dir == 'sell' then
 		transactions:orderWithId(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(tonumber(security.last) - 150 * minStepPrice), qty, trans_id)
 	end
+	
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() отправлена транзакция ИД '..tostring(trans_id)..' с направлением '..dir..' по цене '..tostring(tonumber(security.last) - 150) .. ', цена инструмента была '..tostring(security.last) .. ', количество '..tostring(qty))
 	
 	--очищаем, т.к. это временно значение
 	window:SetValueByColName(row, 'qty', tostring(0))
@@ -178,10 +180,12 @@ function StartStopRow(row)
 		Red(window.hID, row, col)
 		SetCell(window.hID, row, col, 'stop')
 		window:SetValueByColName(row, 'current_state', 'waiting for a signal')
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'StartStopRow() инструмент запущен в работу')
 	else
 		Green(window.hID, row, col)
 		SetCell(window.hID, row, col, 'start')
 		window:SetValueByColName(row, 'current_state', '')
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'StartStopRow() инструмент остановлен')
 	end
 end
 
@@ -189,7 +193,7 @@ end
 --событие, возникающее после отправки заявки на сервер
 function OnTransReply(trans_reply)
 
-	--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds())
+	logstoscreen:add2(nil, nil, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds() ..', trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status))
 
 	--помещаем номер заявки в таблицу Orders, в строку с текущим trans_id
 	local s = orders:GetSize()
@@ -206,13 +210,14 @@ function OnTransReply(trans_reply)
 	end
 	
 	if trans_reply.status > 3 then
-		logstoscreen:add2(window, row, nil,nil,nil,nil,'error code: '..tostring(trans_reply.status))
+		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) )
 		message('error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
 		
 		--выключаем инструмент, по которому пришла ошибка
 		if rowNum~=nil then
 			window:SetValueByColName(rowNum, 'StartStop', 'start')--turn off
 			window:SetValueByColName(rowNum, 'current_state', '')--turn off
+			logstoscreen:add2(windows, rowNum, nil,nil,nil,nil,  'instrument was turned off because of the error code '..tostring(trans_reply.status))
 		end
 	end
 	
@@ -234,8 +239,8 @@ function OnTrade(trade)
 		processed_trades[#processed_trades+1] = trade.trade_num
 	end
 		
+	logstoscreen:add2(nil, nil, nil,nil,nil,nil,'OnTrade() '..helper:getMiliSeconds() ..', trans_id = '..tostring(trade.trans_id) .. ', number = ' ..tostring(trade.trade_num).. ', order number = ' ..tostring(trade.order_num))
 	
-	--logstoscreen:add2(window, row, nil,nil,nil,nil,'onTrade '..helper:getMiliSeconds())
 	
 	--добавим количество из сделки в колонку qty_fact главной таблицы
 	local s = orders:GetSize()
@@ -274,7 +279,7 @@ function OnOrder(order)
 	end
 	
 	--logstoscreen:add2(window, row, nil,nil,nil,nil,'onOrder '..helper:getMiliSeconds())
-
+	logstoscreen:add2(nil, nil, nil,nil,nil,nil,'OnOrder() '..helper:getMiliSeconds() ..', trans_id = '..tostring(order.trans_id) .. ', number = ' ..tostring(order.order_num))
 	
 end
 
@@ -432,8 +437,8 @@ function main()
 	--current_state - текущее состояние по инструменту
 	--signal_id - идентификатор сигнала
 	--savedPosition - число - сюда сохраняем позицию перед отправкой транзакции, а потом в функции ожидания ответа проверяем, поменялось ли это количество
-	local position = {x=50,y=105,dx=1300,dy=400}
-	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition'}, position)
+
+	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition'}, settings.main_position)
 	
 	--создаем вспомогательные таблицы
 ---------------------------------------------------------------------------	
@@ -441,14 +446,21 @@ function main()
 		return
 	end
 
-	SetWindowPos(signals.t_id, 810, 10, 700, 200)
-
+	if settings.signals_position ~= nil then
+		if settings.signals_position.x ~= nil and settings.signals_position.y ~= nil and settings.signals_position.dx~=nil and settings.signals_position.dy ~= nil then
+			SetWindowPos(signals.t_id, settings.signals_position.x, settings.signals_position.y, settings.signals_position.dx, settings.signals_position.dy)
+		end 
+	end
 ---------------------------------------------------------------------------	
 	if createTableOrders() == false then
 		return
 	end	
 	
-	SetWindowPos(orders.t_id, 810, 210, 700, 200)
+	if settings.orders_position ~= nil then
+		if settings.orders_position.x ~= nil and settings.orders_position.y ~= nil and settings.orders_position.dx~=nil and settings.orders_position.dy ~= nil then
+			SetWindowPos(orders.t_id, settings.orders_position.x, settings.orders_position.y, settings.orders_position.dx, settings.orders_position.dy)
+		end 
+	end
 	
 		
 	

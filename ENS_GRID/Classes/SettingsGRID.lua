@@ -20,6 +20,14 @@ function Settings:Init()
   helper = Helper()
   helper:Init()
   
+  --ниже идет геометрия экрана
+  
+  self.main_position = {x=50,y=105,dx=1300,dy=400} --позиция главного окна
+  self.log_position = {x=810,y=420,dx=700,dy=300} --позиция окна логов
+  
+  self.signals_position = {x=810,y=10,dx=700,dy=200} --позиция окна сигналов
+  self.orders_position = {x=810,y=210,dx=700,dy=200} --позиция окна заявок
+  
   
 end
 
