@@ -26,7 +26,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Window.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Helper.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Trader.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Transactions.lua")
---dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Security.lua") --этот класс переопределен для данного робота
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Security.lua") 
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logs.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\logstoscreen.lua")
 
@@ -35,7 +35,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
 
 --private for each robot
 dofile (getScriptPath().."\\Classes\\SettingsGRID.lua")
-dofile (getScriptPath().."\\Classes\\Security.lua")--этот класс переопределен для данного робота
+
 
 dofile (getScriptPath() .. "\\quik_table_wrapper.lua")
 
@@ -102,31 +102,48 @@ function BuySell(row)
 	security.code = SecCodeBox
 	security:Update()
 	
-	local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)
+	--local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)
 
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена Last '..tostring(security.last))
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() minStepPrice '..tostring(security.minStepPrice))
+	
+	security:GetEdgePrices()--только для фьючей
+	
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() pricemax '..tostring(security.pricemax))--только для фьючей
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() pricemin '..tostring(security.pricemin))--только для фьючей
+	
+	
 	--проверка цены на превышение лимитов
 	local price = 0
-	security:getEdgePrices()
+	
     if dir == 'buy' then
-		local price = tonumber(security.last) + 150 * minStepPrice
-		if price > security.pricemax then
+		price = tonumber(security.last) + 150 * security.minStepPrice
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() price = last + 150 * minStepPrice =  '..tostring(price))
+		if security.pricemax~=0 and price > security.pricemax then
+			--только для фьючей
 			price = security.pricemax
+			logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена была скорректирована из-за выхода за границы диапазона. Новое значение '..tostring(price))
 		end
 	elseif dir == 'sell' then
-		local price = tonumber(security.last) - 150 * minStepPrice
-		if price < security.pricemin then
+		price = tonumber(security.last) - 150 * security.minStepPrice
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() price = last - 150 * minStepPrice =  '..tostring(price))
+		if security.pricemin~=0 and price < security.pricemin then
+			--только для фьючей
 			price = security.pricemin
+			logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена была скорректирована из-за выхода за границы диапазона. Новое значение '..tostring(price))
 		end
 	end	
 	
 	
     if dir == 'buy' then
 		transactions:orderWithId(SecCodeBox, ClassCode, "B", ClientBox, DepoBox, tostring(price), qty, trans_id)
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() отправлена транзакция ИД '..tostring(trans_id)..' с направлением BUY по цене '..tostring(price) .. ', цена инструмента была '..tostring(security.last) .. ', количество '..tostring(qty))
 	elseif dir == 'sell' then
 		transactions:orderWithId(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(price), qty, trans_id)
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() отправлена транзакция ИД '..tostring(trans_id)..' с направлением SELL по цене '..tostring(price) .. ', цена инструмента была '..tostring(security.last) .. ', количество '..tostring(qty))
 	end
 	
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() отправлена транзакция ИД '..tostring(trans_id)..' с направлением '..dir..' по цене '..tostring(tonumber(security.last) - 150) .. ', цена инструмента была '..tostring(security.last) .. ', количество '..tostring(qty))
+	
 	
 	--очищаем, т.к. это временно значение
 	window:SetValueByColName(row, 'qty', tostring(0))
@@ -148,20 +165,21 @@ function BuySell_no_trans_id(row, dir)
 	security.code = SecCodeBox
 	security:Update()
 	
-	local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)
+	
 	
 	--проверка цены на превышение лимитов
 	local price = 0
 	security:getEdgePrices()
     if dir == 'buy' then
-		local price = tonumber(security.last) + 150 * minStepPrice
+		price = tonumber(security.last) + (150 * security.minStepPrice)
 		if price > security.pricemax then
 			price = security.pricemax
 		end
 	elseif dir == 'sell' then
-		local price = tonumber(security.last) - 150 * minStepPrice
+		price = tonumber(security.last) - (150 * security.minStepPrice)
 		if price < security.pricemin then
 			price = security.pricemin
+			
 		end
 	end	
 	
@@ -241,19 +259,43 @@ function OnTransReply(trans_reply)
 		end
 	end
 	
-	if trans_reply.status > 3 then
-		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) )
+	if trans_reply.status == 2 or trans_reply.status > 3 then
+		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) ..', '..StatusByNumber(trans_reply.status) )
+		
+		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'подробное сообщение к предыдущей строке: '.. trans_reply.result_msg)
+		
 		message('error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
 		
 		--выключаем инструмент, по которому пришла ошибка
 		if rowNum~=nil then
 			window:SetValueByColName(rowNum, 'StartStop', 'start')--turn off
 			window:SetValueByColName(rowNum, 'current_state', '')--turn off
+			Green(window.hID, row, window:GetColNumberByName('StartStop'))
 			logstoscreen:add2(windows, rowNum, nil,nil,nil,nil,  'instrument was turned off because of the error code '..tostring(trans_reply.status))
 		end
 	end
 	
 end 
+
+function StatusByNumber(number)
+
+--Статус транзакции. Возможные значения: 
+if number == 0 or number == '0' then return "транзакция отправлена серверу" end 
+if number == 1 or number == '1' then return "транзакция получена на сервер QUIK от клиента" end
+if number == 2 or number == '2' then return "ошибка при передаче транзакции в торговую систему, так как отсутствует подключение шлюза Московской Биржи, повторно транзакция не отправляется" end
+if number == 3 or number == '3' then return "транзакция выполнена" end
+if number == 4 or number == '4' then return "транзакция не выполнена торговой системой. Более подробное описание ошибки отражается в поле Сообщение" end
+if number == 5 or number == '5' then return "транзакция не прошла проверку сервера QUIK по каким-либо критериям. Например, проверку на наличие прав у пользователя на отправку транзакции данного типа" end
+if number == 6 or number == '6' then return "транзакция не прошла проверку лимитов сервера QUIK" end
+if number == 10 or number == '10' then return "транзакция не поддерживается торговой системой" end
+if number == 11 or number == '11' then return "транзакция не прошла проверку правильности электронной цифровой подписи" end
+if number == 12 or number == '12' then return "не удалось дождаться ответа на транзакцию, т.к. истек таймаут ожидания. Может возникнуть при подаче транзакций из QPILE" end
+if number == 13 or number == '13' then return "транзакция отвергнута, так как ее выполнение могло привести к кросс-сделке (т.е. сделке с тем же самым клиентским счетом)" end
+if number == 14 or number == '14' then return "транзакция не прошла контроль дополнительных ограничений" end
+if number == 15 or number == '15' then return "транзакция принята после нарушения дополнительных ограничений" end
+if number == 16 or number == '16' then return "транзакция отменена пользователем в ходе проверки дополнительных ограничений" end
+
+end
 
 function OnTrade(trade)
 
@@ -296,16 +338,21 @@ end
 
 function OnOrder(order)
 	
+	--тут есть нюанс. приходят несколько колбэков, и в первом еще нет trans_id! поэтому первый колбэк не обрабатываем
+	if order.trans_id==0 then
+		return
+	end
 	--если заявка уже есть в таблице обработанных, то еще раз не надо ее обрабатывать
 	local found = false
 	for i = 1, #processed_orders do
+		
 		if tostring(processed_orders[i]) == tostring(order.order_num) then
 			found = true
 			break
 		end
 	end
 	if found == true then
-		return
+		--return
 	else
 		processed_orders[#processed_orders+1] = order.order_num
 	end
