@@ -1,5 +1,6 @@
 Security = class(function(acc)
 end)
+
 function Security:Init(class, code)
   self.minStepPrice = getParamEx(class, code, "SEC_PRICE_STEP").param_value + 0
   self.STEPPRICET = getParamEx(class, code, "STEPPRICET").param_value + 0
@@ -13,7 +14,22 @@ function Security:Init(class, code)
   self.last = getParamEx(class, code, "LAST").param_value + 0
   self.code = code
   self.class = class
+  
+  self.pricemax = 0
+  self.pricemin = 0
+  
 end
+
 function Security:Update()
   self.last = getParamEx(self.class, self.code, "LAST").param_value + 0
+ 
+end
+
+--функция получает "крайние" цены - минимально и максимально возможную
+function Security:getEdgePrices()
+
+	self.pricemax = getParamEx(self.class, self.code, "PRICEMAX").param_value + 0
+	self.pricemin = getParamEx(self.class, self.code, "PRICEMIN").param_value + 0
+
+
 end

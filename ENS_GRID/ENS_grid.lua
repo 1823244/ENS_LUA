@@ -103,11 +103,27 @@ function BuySell(row)
 	security:Update()
 	
 	local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)
-    
+
+	--проверка цены на превышение лимитов
+	local price = 0
+	security:getEdgePrices()
     if dir == 'buy' then
-		transactions:orderWithId(SecCodeBox, ClassCode, "B", ClientBox, DepoBox, tostring(tonumber(security.last) + 150 * minStepPrice), qty, trans_id)
+		local price = tonumber(security.last) + 150 * minStepPrice
+		if price > security.pricemax then
+			price = security.pricemax
+		end
 	elseif dir == 'sell' then
-		transactions:orderWithId(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(tonumber(security.last) - 150 * minStepPrice), qty, trans_id)
+		local price = tonumber(security.last) - 150 * minStepPrice
+		if price < security.pricemin then
+			price = security.pricemin
+		end
+	end	
+	
+	
+    if dir == 'buy' then
+		transactions:orderWithId(SecCodeBox, ClassCode, "B", ClientBox, DepoBox, tostring(price), qty, trans_id)
+	elseif dir == 'sell' then
+		transactions:orderWithId(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(price), qty, trans_id)
 	end
 	
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() отправлена транзакция ИД '..tostring(trans_id)..' с направлением '..dir..' по цене '..tostring(tonumber(security.last) - 150) .. ', цена инструмента была '..tostring(security.last) .. ', количество '..tostring(qty))
@@ -133,10 +149,26 @@ function BuySell_no_trans_id(row, dir)
 	security:Update()
 	
 	local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)
+	
+	--проверка цены на превышение лимитов
+	local price = 0
+	security:getEdgePrices()
     if dir == 'buy' then
-		transactions:order(SecCodeBox, ClassCode, "B", ClientBox, DepoBox, tostring(tonumber(security.last) + 150 * minStepPrice), qty)
+		local price = tonumber(security.last) + 150 * minStepPrice
+		if price > security.pricemax then
+			price = security.pricemax
+		end
 	elseif dir == 'sell' then
-		transactions:order(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(tonumber(security.last) - 150 * minStepPrice), qty)
+		local price = tonumber(security.last) - 150 * minStepPrice
+		if price < security.pricemin then
+			price = security.pricemin
+		end
+	end	
+	
+    if dir == 'buy' then
+		transactions:order(SecCodeBox, ClassCode, "B", ClientBox, DepoBox, tostring(price), qty)
+	elseif dir == 'sell' then
+		transactions:order(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(price), qty)
 	end
 	
 end
@@ -524,18 +556,18 @@ function createTableSignals()
 		--message("table with id = " ..signals.t_id .. " created", 1)
 	end
 
-	signals:AddColumn("row", 		QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
-	signals:AddColumn("id", 		QTABLE_INT_TYPE, 10)
-	signals:AddColumn("dir", 		QTABLE_CACHED_STRING_TYPE, 4)
-	signals:AddColumn("account", 	QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("depo", 		QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("sec_code", 	QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("class_code", QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("date", 		QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
-	signals:AddColumn("time", 		QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
-	signals:AddColumn("price", 		QTABLE_DOUBLE_TYPE, 10)
+	signals:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	signals:AddColumn("id",				QTABLE_INT_TYPE, 10)
+	signals:AddColumn("dir",			QTABLE_CACHED_STRING_TYPE, 4)
+	signals:AddColumn("account",		QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("depo",			QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("sec_code",	QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("class_code",	QTABLE_CACHED_STRING_TYPE, 10)
+	signals:AddColumn("date",			QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
+	signals:AddColumn("time",			QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
+	signals:AddColumn("price",			QTABLE_DOUBLE_TYPE, 10)
 	signals:AddColumn("MA",			QTABLE_DOUBLE_TYPE, 10)
-	signals:AddColumn("done", 		QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("done",			QTABLE_STRING_TYPE, 10)
 	
 	signals:SetCaption("Signals")
 	signals:Show()
@@ -554,18 +586,18 @@ function createTableOrders()
 		--message("table with id = " ..orders.t_id .. " created", 1)
 	end
 	
-	orders:AddColumn("row", 		QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
-	orders:AddColumn("signal_id", 	QTABLE_INT_TYPE, 10)
-	orders:AddColumn("sig_dir", 	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("account", 	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("depo", 		QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("sec_code", 	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("class_code", 	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("trans_id", 	QTABLE_INT_TYPE, 10)
-	orders:AddColumn("order", 		QTABLE_INT_TYPE, 10)
-	orders:AddColumn("trade", 		QTABLE_INT_TYPE, 10)
-	orders:AddColumn("qty", 		QTABLE_INT_TYPE, 10) --количество из заявки
-	orders:AddColumn("qty_fact", 	QTABLE_INT_TYPE, 10) --количество из сделок
+	orders:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	orders:AddColumn("signal_id",		QTABLE_INT_TYPE, 10)
+	orders:AddColumn("sig_dir",		QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("account",		QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("depo",			QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("sec_code",	QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("class_code",	QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("trans_id",		QTABLE_INT_TYPE, 10)
+	orders:AddColumn("order",			QTABLE_INT_TYPE, 10)
+	orders:AddColumn("trade",			QTABLE_INT_TYPE, 10)
+	orders:AddColumn("qty",			QTABLE_INT_TYPE, 10) --количество из заявки
+	orders:AddColumn("qty_fact",		QTABLE_INT_TYPE, 10) --количество из сделок
 	
 	orders:SetCaption("orders")
 	orders:Show()
@@ -589,8 +621,8 @@ function main_loop(row)
 	local sec = window:GetValueByColName(row, 'Ticker').image
 	local class = window:GetValueByColName(row, 'Class').image
 	
+	security.class = class
 	security.code = sec
-	security.class = class	
 	security:Update()	--обновляет цену последней сделки в таблице security (свойство Last,Close)
 
 	--помещаем цену в окно робота. просто для визуального наблюдения		
