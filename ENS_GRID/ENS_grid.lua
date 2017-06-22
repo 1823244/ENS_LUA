@@ -15,6 +15,9 @@
 --получение значения из ячейки
 --local acc = window:GetValueByColName(row, 'Account').image
 
+local sqlite3 = require("lsqlite3")
+
+
 local bit = require"bit"
 local math_ceil = math.ceil
 local math_floor = math.floor
@@ -35,6 +38,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
 
 --private for each robot
 dofile (getScriptPath().."\\Classes\\SettingsGRID.lua")
+dofile (getScriptPath().."\\Classes\\HelperGRID.lua")--вспомогательные функции только для этого робота
 
 
 dofile (getScriptPath() .. "\\quik_table_wrapper.lua")
@@ -43,6 +47,7 @@ dofile (getScriptPath() .. "\\quik_table_wrapper.lua")
 trader ={}
 trans={}
 helper={}
+helperGrid={}
 settings={}
 strategy={}
 security={}
@@ -60,6 +65,8 @@ local orders = {} --таблица заявок
 local processed_trades = {} --таблица обработанных сделок
 local processed_orders = {} --таблица обработанных заявок
 
+local db = nil --подключение к базе SQLite
+
 function OnInit(path)
 	trader = Trader()
 	trader:Init(path)
@@ -70,6 +77,8 @@ function OnInit(path)
 	settings:Load(trader.Path)
 	helper= Helper()
 	helper:Init()
+	helperGrid= HelperGrid()
+	helperGrid:Init()
 	security=Security()
 	security:Init()
 	strategy=Strategy()
@@ -79,8 +88,18 @@ function OnInit(path)
 	
   	logstoscreen = LogsToScreen()
 	
+	helperGrid.logstoscreen = logstoscreen
+	
 	local extended = true--флаг расширенной таблицы лога
 	logstoscreen:Init(settings.log_position, extended) 	
+	
+	db = sqlite3.open(settings.db_path)
+	helperGrid.db = db
+	
+	--создадим таблицы для ведения логов и сигналов в SQLite
+	helperGrid:create_sqlite_table_orders()
+	helperGrid:create_sqlite_table_signals()
+		
 end
 
 --это не обработчик события, а просто функция покупки/продажи
@@ -227,12 +246,12 @@ function StartStopRow(row)
 
 	local col = window:GetColNumberByName('StartStop')
 	if window:GetValueByColName(row, 'StartStop').image == 'start' then
-		Red(window.hID, row, col)
+		helperGrid:Red(window.hID, row, col)
 		SetCell(window.hID, row, col, 'stop')
 		window:SetValueByColName(row, 'current_state', 'waiting for a signal')
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'StartStopRow() инструмент запущен в работу')
 	else
-		Green(window.hID, row, col)
+		helperGrid:Green(window.hID, row, col)
 		SetCell(window.hID, row, col, 'start')
 		window:SetValueByColName(row, 'current_state', '')
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'StartStopRow() инструмент остановлен')
@@ -270,7 +289,7 @@ function OnTransReply(trans_reply)
 		if rowNum~=nil then
 			window:SetValueByColName(rowNum, 'StartStop', 'start')--turn off
 			window:SetValueByColName(rowNum, 'current_state', '')--turn off
-			Green(window.hID, row, window:GetColNumberByName('StartStop'))
+			helperGrid:Green(window.hID, row, window:GetColNumberByName('StartStop'))
 			logstoscreen:add2(windows, rowNum, nil,nil,nil,nil,  'instrument was turned off because of the error code '..tostring(trans_reply.status))
 		end
 	end
@@ -391,15 +410,9 @@ local f_cb = function( t_id,  msg,  par1, par2)
 			if x["image"]=="start" then
 				--StartRow(par1, par2)
 				StartStopRow(par1)
-				
 			else
 				--Stop but not closed
 				StartStopRow(par1)
-				--[[
-				Green(window.hID, par1, par2)
-				SetCell(window.hID, par1, par2, 'start')
-				window:SetValueByColName(par1, 'current_state', nil)
-				--]]
 			end
 		elseif (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('BuyMarket') then
 			--message('buy')
@@ -474,8 +487,8 @@ function AddRowsToMainWindow()
 		
 		--чтобы получить номер колонки используем функцию GetColNumberByName()
 		
-		Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
-		Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
+		helperGrid:Green(window.hID, rowNum, window:GetColNumberByName('BuyMarket')) 
+		helperGrid:Red(window.hID, rowNum, window:GetColNumberByName('SellMarket')) 
 		
 		local minStepPrice = getParamEx(List[row][6], 	List[row][3], "SEC_PRICE_STEP").param_value + 0
 		window:SetValueByColName(rowNum, 'minStepPrice', tostring(minStepPrice))
@@ -521,19 +534,23 @@ function main()
 	
 	--создаем вспомогательные таблицы
 ---------------------------------------------------------------------------	
-	if createTableSignals() == false then
+	if helperGrid:createTableSignals() == false then
 		return
 	end
 
+	signals = helperGrid.signals
+	
 	if settings.signals_position ~= nil then
 		if settings.signals_position.x ~= nil and settings.signals_position.y ~= nil and settings.signals_position.dx~=nil and settings.signals_position.dy ~= nil then
 			SetWindowPos(signals.t_id, settings.signals_position.x, settings.signals_position.y, settings.signals_position.dx, settings.signals_position.dy)
 		end 
 	end
 ---------------------------------------------------------------------------	
-	if createTableOrders() == false then
+	if helperGrid:createTableOrders() == false then
 		return
 	end	
+	
+	orders = helperGrid.orders
 	
 	if settings.orders_position ~= nil then
 		if settings.orders_position.x ~= nil and settings.orders_position.y ~= nil and settings.orders_position.dx~=nil and settings.orders_position.dy ~= nil then
@@ -572,85 +589,6 @@ function main()
 		sleep(1000)
 	end
 
-end
-
---- Функции по раскраске строк/ячеек таблицы
-function Red(t_id, Line, Col)    -- Красный
-   -- Если индекс столбца не указан, окрашивает всю строку
-   if Col == nil then Col = QTABLE_NO_INDEX; end;
-   SetColor(t_id, Line, Col, RGB(255,168,164), RGB(0,0,0), RGB(255,168,164), RGB(0,0,0));
-end;
-
-function Gray(Line, Col)   -- Серый
-   -- Если индекс столбца не указан, окрашивает всю строку
-   if Col == nil then Col = QTABLE_NO_INDEX; end;
-   SetColor(t_id, Line, Col, RGB(200,200,200), RGB(0,0,0), RGB(200,200,200), RGB(0,0,0));
-end;
-
-function Green(t_id, Line, Col)  -- Зеленый
-   -- Если индекс столбца не указан, окрашивает всю строку
-   if Col == nil then Col = QTABLE_NO_INDEX; end;
-   SetColor(t_id, Line, Col, RGB(165,227,128), RGB(0,0,0), RGB(165,227,128), RGB(0,0,0));
-end;
-
-function createTableSignals()
-	
-	signals = QTable.new()
-	if not signals then
-		message("error creation table Signals!", 3)
-		return false
-	else
-		--message("table with id = " ..signals.t_id .. " created", 1)
-	end
-
-	signals:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
-	signals:AddColumn("id",				QTABLE_INT_TYPE, 10)
-	signals:AddColumn("dir",			QTABLE_CACHED_STRING_TYPE, 4)
-	signals:AddColumn("account",		QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("depo",			QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("sec_code",	QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("class_code",	QTABLE_CACHED_STRING_TYPE, 10)
-	signals:AddColumn("date",			QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
-	signals:AddColumn("time",			QTABLE_CACHED_STRING_TYPE, 10) --время свечи, на которой сформировался сигнал
-	signals:AddColumn("price",			QTABLE_DOUBLE_TYPE, 10)
-	signals:AddColumn("MA",			QTABLE_DOUBLE_TYPE, 10)
-	signals:AddColumn("done",			QTABLE_STRING_TYPE, 10)
-	
-	signals:SetCaption("Signals")
-	signals:Show()
-	
-	return true
-	
-end
-
-function createTableOrders()
-	
-	orders = QTable.new()
-	if not orders then
-		message("error creation table orders!", 3)
-		return false
-	else
-		--message("table with id = " ..orders.t_id .. " created", 1)
-	end
-	
-	orders:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
-	orders:AddColumn("signal_id",		QTABLE_INT_TYPE, 10)
-	orders:AddColumn("sig_dir",		QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("account",		QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("depo",			QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("sec_code",	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("class_code",	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("trans_id",		QTABLE_INT_TYPE, 10)
-	orders:AddColumn("order",			QTABLE_INT_TYPE, 10)
-	orders:AddColumn("trade",			QTABLE_INT_TYPE, 10)
-	orders:AddColumn("qty",			QTABLE_INT_TYPE, 10) --количество из заявки
-	orders:AddColumn("qty_fact",		QTABLE_INT_TYPE, 10) --количество из сделок
-	
-	orders:SetCaption("orders")
-	orders:Show()
-	
-	return true
-	
 end
 
 --+-----------------------------------------------
@@ -828,16 +766,20 @@ function processSignal(row)
 		window:SetValueByColName(row, 'qty', tostring(qty))
 		
 		--для визуального контроля пишем информацию о заявке во вспомогательную таблицу
+		--заменил код в комменте на вызов функции
+		helperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, qty, window) 
+		--[[
 		local newR = orders:AddLine()
 		orders:SetValue(newR, "row", 			row)
 		orders:SetValue(newR, "trans_id", 		trans_id)
 		orders:SetValue(newR, "signal_id", 		signal_id)
 		orders:SetValue(newR, "sig_dir", 		signal_direction)
 		orders:SetValue(newR, "qty", 			qty)	--количество в заявке, потом будем сравнивать с ним количество из колонки qty_fact
-		orders:SetValue(newR, "sec_code", 	window:GetValueByColName(row, 'Ticker').image)
+		orders:SetValue(newR, "sec_code", 		window:GetValueByColName(row, 'Ticker').image)
 		orders:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
 		orders:SetValue(newR, "account", 		window:GetValueByColName(row, 'Account').image)
 		orders:SetValue(newR, "depo", 			window:GetValueByColName(row, 'Depo').image)
+		--]]
 		
 		--сохраним "старую" позицию
 		window:SetValueByColName(row, 'savedPosition', tostring(factQuantity))
@@ -991,6 +933,9 @@ function wait_for_signal(row)
 	local signal_id = helper:getMiliSeconds_trans_id()
 	window:SetValueByColName(row, 'signal_id', tostring(signal_id))
 	
+	--код ниже в комменте заменен на этот вызов функции
+	helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, strategy.PriceSeries[1].close, strategy.Ma1, false) 
+	--[[
 	local newR = signals:AddLine()
 	signals:SetValue(newR, "row", row)
 	signals:SetValue(newR, "id", 	signal_id)
@@ -1008,19 +953,19 @@ function wait_for_signal(row)
 	--signals:SetValue(newR, "MA", 	EMA_TMP[#EMA_TMP-1])
 	signals:SetValue(newR, "price", strategy.Ma1)
 	signals:SetValue(newR, "done", false)
+	--]]
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
 	window:SetValueByColName(row, 'current_state', 'processing signal')
 	
 end
 
---[[ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
+--[[	ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
 сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
 т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю эту свечу.
 Есть один баг. Если робота перезапустить во время жизни свечи, на которой возник сигнал, то он опять увидит этот сигнал
 и попробует вставить в позицию. Если позиция уже была сформирована до перезапуска, то ничего страшного, 
 сработает проверка plan-fact и не позволит увеличить позу.
-
 --]]
 function find_signal(row, candle_date, candle_time)
 	local rows=0

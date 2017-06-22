@@ -1,6 +1,7 @@
 helper = {}
 Settings = class(function(acc)
 end)
+
 function Settings:Init()
   self.DepoBox = ""
   self.ClientBox = ""
@@ -28,7 +29,7 @@ function Settings:Init()
   self.signals_position = {x=810,y=10,dx=700,dy=200} --позиция окна сигналов
   self.orders_position = {x=810,y=210,dx=700,dy=200} --позиция окна заявок
   
-  
+  self.db_path = getScriptPath() .. "\\ens_grid.db"
 end
 
 function Settings:Load(path)
