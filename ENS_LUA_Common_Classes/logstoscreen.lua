@@ -1,5 +1,7 @@
 --этот класс создает таблицу с логами и показывает ее в терминале
 helper = {}
+helperGrid = {}
+
 local window = {}
 LogsToScreen = class(function(acc)
 end)
@@ -12,11 +14,14 @@ function LogsToScreen:Init(position, extended)
 	helper = Helper()
 	helper:Init()
   
+	helperGrid= HelperGrid()
+	helperGrid:Init()
+  
 	local columns = {}
 	window = Window()
 	if extended ~= nil then
 		if extended == true then
-			columns = {'Time_','Account','Depo','Sec','Class','Message_'}
+			columns = {'Time_','robot_id','Account','Depo','Sec','Class','Message_'}
 		else
 			columns = {'Time_','Message_'}
 		end
@@ -70,11 +75,13 @@ function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
 	local rowNum = InsertRow(window.hID, -1)
 		
 	window:SetValueByColName(rowNum, 'Time_',timetolog)
+	window:SetValueByColName(rowNum, 'robot_id', settings.robot_id)
 	window:SetValueByColName(rowNum, 'Account', account)
 	window:SetValueByColName(rowNum, 'Depo', depo)
 	window:SetValueByColName(rowNum, 'Sec', sec)
 	window:SetValueByColName(rowNum, 'Class', class)
 	window:SetValueByColName(rowNum, 'Message_', text)
 
+	helperGrid:addRowToLogsSQLite(row, timetolog, account, depo, sec, class, text) 
   
 end

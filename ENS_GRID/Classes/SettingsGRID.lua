@@ -12,14 +12,16 @@ function Settings:Init()
   self.IdPriceCombo = ""
   self.IdMA = ""
   self.logFile = ""
-  self.invert_deals = nil
-  self.start_all = nil
+  self.invert_deals = false
+  self.start_all = true
   
   self.Path = ""
   self.TableCaption=""
   self.rejim=""
   helper = Helper()
   helper:Init()
+  
+  self.logFile = getScriptPath()..'\\log.txt'
   
   --ниже идет геометрия экрана
   
@@ -30,17 +32,10 @@ function Settings:Init()
   self.orders_position = {x=810,y=210,dx=700,dy=200} --позиция окна заявок
   
   self.db_path = getScriptPath() .. "\\ens_grid.db"
+  self.robot_id = 'ENS_GRID_01'
 end
 
-function Settings:Load(path)
 
-	self.invert_deals = false --режим для убыточных трейдеров :) если Истина - открывает сделки в сторону, противоположную сигналу
-	self.logFile = getScriptPath()..'\\log.txt'
-  
-	self.start_all = true--если в настройках строки будет 'start' (в функции Settings:instruments_list()), то она будет включена при запуске
-
-
-end
 
 function Settings:instruments_list()
   

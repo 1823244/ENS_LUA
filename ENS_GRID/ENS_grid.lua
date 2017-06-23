@@ -74,7 +74,6 @@ function OnInit(path)
 	trans:Init()
 	settings=Settings()
 	settings:Init()
-	settings:Load(trader.Path)
 	helper= Helper()
 	helper:Init()
 	helperGrid= HelperGrid()
@@ -99,6 +98,7 @@ function OnInit(path)
 	--создадим таблицы для ведения логов и сигналов в SQLite
 	helperGrid:create_sqlite_table_orders()
 	helperGrid:create_sqlite_table_signals()
+	helperGrid:create_sqlite_table_Logs()
 		
 end
 
@@ -279,7 +279,7 @@ function OnTransReply(trans_reply)
 	end
 	
 	if trans_reply.status == 2 or trans_reply.status > 3 then
-		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) ..', '..StatusByNumber(trans_reply.status) )
+		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) ..', '..helperGrid:StatusByNumber(trans_reply.status) )
 		
 		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'подробное сообщение к предыдущей строке: '.. trans_reply.result_msg)
 		
@@ -296,25 +296,7 @@ function OnTransReply(trans_reply)
 	
 end 
 
-function StatusByNumber(number)
 
---Статус транзакции. Возможные значения: 
-if number == 0 or number == '0' then return "транзакция отправлена серверу" end 
-if number == 1 or number == '1' then return "транзакция получена на сервер QUIK от клиента" end
-if number == 2 or number == '2' then return "ошибка при передаче транзакции в торговую систему, так как отсутствует подключение шлюза Московской Биржи, повторно транзакция не отправляется" end
-if number == 3 or number == '3' then return "транзакция выполнена" end
-if number == 4 or number == '4' then return "транзакция не выполнена торговой системой. Более подробное описание ошибки отражается в поле Сообщение" end
-if number == 5 or number == '5' then return "транзакция не прошла проверку сервера QUIK по каким-либо критериям. Например, проверку на наличие прав у пользователя на отправку транзакции данного типа" end
-if number == 6 or number == '6' then return "транзакция не прошла проверку лимитов сервера QUIK" end
-if number == 10 or number == '10' then return "транзакция не поддерживается торговой системой" end
-if number == 11 or number == '11' then return "транзакция не прошла проверку правильности электронной цифровой подписи" end
-if number == 12 or number == '12' then return "не удалось дождаться ответа на транзакцию, т.к. истек таймаут ожидания. Может возникнуть при подаче транзакций из QPILE" end
-if number == 13 or number == '13' then return "транзакция отвергнута, так как ее выполнение могло привести к кросс-сделке (т.е. сделке с тем же самым клиентским счетом)" end
-if number == 14 or number == '14' then return "транзакция не прошла контроль дополнительных ограничений" end
-if number == 15 or number == '15' then return "транзакция принята после нарушения дополнительных ограничений" end
-if number == 16 or number == '16' then return "транзакция отменена пользователем в ходе проверки дополнительных ограничений" end
-
-end
 
 function OnTrade(trade)
 

@@ -1,3 +1,5 @@
+settings = {}
+
 HelperGrid = class(function(acc)
 end)
 
@@ -6,6 +8,9 @@ function HelperGrid:Init()
 	self.signals = {}
 	self.db = nil
 	self.logstoscreen = nil
+	
+  settings = Settings()
+  settings:Init()	
 end
 
 
@@ -17,7 +22,7 @@ function HelperGrid:Red(t_id, Line, Col)    -- Красный
    SetColor(t_id, Line, Col, RGB(255,168,164), RGB(0,0,0), RGB(255,168,164), RGB(0,0,0));
 end;
 
-function HelperGrid:Gray(Line, Col)   -- Серый
+function HelperGrid:Gray(t_id, Line, Col)   -- Серый
    -- Если индекс столбца не указан, окрашивает всю строку
    if Col == nil then Col = QTABLE_NO_INDEX; end;
    SetColor(t_id, Line, Col, RGB(200,200,200), RGB(0,0,0), RGB(200,200,200), RGB(0,0,0));
@@ -28,6 +33,8 @@ function HelperGrid:Green(t_id, Line, Col)  -- Зеленый
    if Col == nil then Col = QTABLE_NO_INDEX; end;
    SetColor(t_id, Line, Col, RGB(165,227,128), RGB(0,0,0), RGB(165,227,128), RGB(0,0,0));
 end;
+
+
 
 function HelperGrid:createTableSignals()
 	
@@ -51,6 +58,7 @@ function HelperGrid:createTableSignals()
 	signals:AddColumn("price",			QTABLE_DOUBLE_TYPE, 10)
 	signals:AddColumn("MA",			QTABLE_DOUBLE_TYPE, 10)
 	signals:AddColumn("done",			QTABLE_STRING_TYPE, 10)
+	signals:AddColumn("robot_id",		QTABLE_STRING_TYPE, 10)
 	
 	signals:SetCaption("Signals")
 	
@@ -85,7 +93,7 @@ function HelperGrid:createTableOrders()
 	orders:AddColumn("trade",			QTABLE_INT_TYPE, 10)
 	orders:AddColumn("qty",			QTABLE_INT_TYPE, 10) --количество из заявки
 	orders:AddColumn("qty_fact",		QTABLE_INT_TYPE, 10) --количество из сделок
-	
+	orders:AddColumn("robot_id",		QTABLE_STRING_TYPE, 10)
 	
 	
 	orders:SetCaption("orders")
@@ -98,10 +106,11 @@ function HelperGrid:createTableOrders()
 	
 end
 
+
 --создает таблицу в базе SQLite. если таблица уже есть - она не пересоздается
 function HelperGrid:create_sqlite_table_orders()
 	local sql=[=[
-          CREATE TABLE orders_
+          CREATE TABLE orders
           (
 		   rownum INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
           
@@ -117,6 +126,7 @@ function HelperGrid:create_sqlite_table_orders()
 			trade_num	TEXT,
 			qty			TEXT,
 			qty_fact	TEXT,
+			robot_id	TEXT,
 			reserve1	TEXT,--это запасные поля
 			reserve2	TEXT,
 			reserve3	TEXT,
@@ -153,6 +163,7 @@ function HelperGrid:create_sqlite_table_signals()
 			price		TEXT,--значение цены на закрывшейся свече
 			MA			TEXT,--значение скользящей на закрывшейся свече
 			done		TEXT,--признак того, что сигнал полностью обработан
+			robot_id	TEXT,
 			reserve1	TEXT,--это запасные поля
 			reserve2	TEXT,
 			reserve3	TEXT,
@@ -170,6 +181,44 @@ function HelperGrid:create_sqlite_table_signals()
    self.db:exec(sql)
 end
 
+
+--создает таблицу в базе SQLite. если таблица уже есть - она не пересоздается
+function HelperGrid:create_sqlite_table_Logs()
+	local sql=[=[
+          CREATE TABLE logs
+          (
+		   rownum INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+		  
+		  
+		  
+			row 		TEXT, --номер строки в главной таблице. внешний ключ!!!
+			time_		TEXT,
+			robot_id	TEXT,
+			account		TEXT,
+			depo		TEXT,
+			sec_code	TEXT,
+			class_code	TEXT,
+			message		TEXT,
+			reserve1	TEXT,--это запасные поля
+			reserve2	TEXT,
+			reserve3	TEXT,
+			reserve4	TEXT,
+			reserve5	TEXT,
+			reserve6	TEXT,
+			reserve7	TEXT,
+			reserve8	TEXT,
+			reserve9	TEXT,
+			reserve0	TEXT
+        
+          );          
+        ]=]
+         
+   self.db:exec(sql)
+end
+
+
+
+
 --добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite
 function HelperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, qty, window) 
 		
@@ -184,7 +233,8 @@ function HelperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, q
 	self.orders:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
 	self.orders:SetValue(newR, "account", 		window:GetValueByColName(row, 'Account').image)
 	self.orders:SetValue(newR, "depo", 			window:GetValueByColName(row, 'Depo').image)
-
+	self.orders:SetValue(newR, "robot_id", settings.robot_id)
+	
 	self:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window) 
 end
 
@@ -210,9 +260,13 @@ function HelperGrid:addRowToSignals(row, trans_id, signal_id, signal_direction, 
 	self.signals:SetValue(newR, "price", MA)
 	self.signals:SetValue(newR, "done", done)
 	
+	self.signals:SetValue(newR, "robot_id", settings.robot_id)
+	
+	
 	self:addRowToSignalsSQLite(row, trans_id, signal_id, signal_direction, window, candle_date, candle_time, price, MA, done) 
 	
 end
+
 
 --добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite
 function HelperGrid:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window) 
@@ -229,7 +283,8 @@ function HelperGrid:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direct
 			sec_code,
 			class_code,
 			trans_id,
-			qty)
+			qty,
+			robot_id)
            VALUES(
 		   ]=]
 		   .. k..tostring(row)..k..','..
@@ -240,7 +295,8 @@ function HelperGrid:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direct
 		    k..tostring(window:GetValueByColName(row, 'Ticker').image)..k..','..
 		    k..tostring(window:GetValueByColName(row, 'Class').image)..k..','..
 		    k..tostring(trans_id)..k..','..
-		    k..tostring(qty)..k..
+		    k..tostring(qty)..k..','..
+			k..tostring(settings.robot_id)..k..
 		   
 		   [=[
 		   )
@@ -270,7 +326,8 @@ local k = "'"
 			time,
 			price,
 			MA,
-			done)
+			done,
+			robot_id)
 			
            VALUES(
 		   ]=]
@@ -288,7 +345,57 @@ local k = "'"
 			k..tostring(candle_time)..k..','.. 
 			k..tostring(price)..k..','..
 			k..tostring(MA)..k..','..
-			k..tostring(done)..k..
+			k..tostring(done)..k..','..
+			k..tostring(settings.robot_id)..k..
+		   
+		   [=[
+		   )
+		]=]
+	
+	--message(sql)
+	
+	--logstoscreen:add2(nil, nil, nil,nil,nil,nil,'sql: '..sql)
+	
+	self.db:exec(sql)
+	
+	--[[
+	local newR = self.signals:AddLine()
+	
+
+	--]]
+end
+
+function HelperGrid:addRowToLogsSQLite(row, timetolog, account, depo, sec, class, text) 
+	--row - этот параметр указан не всегда!
+local k = "'"
+	
+	local sql=[=[
+	
+		INSERT INTO logs (
+			row,
+			time_,
+			robot_id,
+			account,
+			depo,
+			sec_code,
+			class_code,
+			message
+		
+			)
+			
+           VALUES(
+		   ]=]
+		   
+			.. k..tostring(row)..k..','..
+			k..tostring(timetolog)..k..','..
+			k..tostring(settings.robot_id)..k..','..
+	
+		    k..tostring(account)..k..','..
+		    k..tostring(depo)..k..','..
+		    k..tostring(sec)..k..','..
+		    k..tostring(class)..k..','..
+	
+			k..tostring(text)..k..
 		   
 		   [=[
 		   )
@@ -309,6 +416,28 @@ end
 
 
 
+
+
+
+function HelperGrid:StatusByNumber(number)
+
+	--Статус транзакции. Возможные значения: 
+	if number == 0 or number == '0' then return "транзакция отправлена серверу" end 
+	if number == 1 or number == '1' then return "транзакция получена на сервер QUIK от клиента" end
+	if number == 2 or number == '2' then return "ошибка при передаче транзакции в торговую систему, так как отсутствует подключение шлюза Московской Биржи, повторно транзакция не отправляется" end
+	if number == 3 or number == '3' then return "транзакция выполнена" end
+	if number == 4 or number == '4' then return "транзакция не выполнена торговой системой. Более подробное описание ошибки отражается в поле Сообщение" end
+	if number == 5 or number == '5' then return "транзакция не прошла проверку сервера QUIK по каким-либо критериям. Например, проверку на наличие прав у пользователя на отправку транзакции данного типа" end
+	if number == 6 or number == '6' then return "транзакция не прошла проверку лимитов сервера QUIK" end
+	if number == 10 or number == '10' then return "транзакция не поддерживается торговой системой" end
+	if number == 11 or number == '11' then return "транзакция не прошла проверку правильности электронной цифровой подписи" end
+	if number == 12 or number == '12' then return "не удалось дождаться ответа на транзакцию, т.к. истек таймаут ожидания. Может возникнуть при подаче транзакций из QPILE" end
+	if number == 13 or number == '13' then return "транзакция отвергнута, так как ее выполнение могло привести к кросс-сделке (т.е. сделке с тем же самым клиентским счетом)" end
+	if number == 14 or number == '14' then return "транзакция не прошла контроль дополнительных ограничений" end
+	if number == 15 or number == '15' then return "транзакция принята после нарушения дополнительных ограничений" end
+	if number == 16 or number == '16' then return "транзакция отменена пользователем в ходе проверки дополнительных ограничений" end
+
+end
 
 
 
