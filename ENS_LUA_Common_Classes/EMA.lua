@@ -26,7 +26,8 @@ function MovingAverage:ema(Period)
 EMAi = (EMAi-1 * (n-1) + 2*Pi) / (n+1), 
 где Pi - значение цены в текущем периоде, 
 EMAi - значение EMA текущего периода, 
-EMAi-1 - значение EMA предыдущего периода 
+EMAi-1 - значение EMA предыдущего периода,
+n - период скользящей средней 
 Начальное значение равно параметру, по которому рассчитывается индикатор: EMA0=P0 – при расчете по цене 
 --]]
 	local tPrice = {}
@@ -57,9 +58,8 @@ EMAi-1 - значение EMA предыдущего периода
 	
 end
 
---[[Exponential Moving Average (EMA)
-EMAi = (EMAi-1*(n-1)+2*Pi) / (n+1)
-]]
+--Exponential Moving Average (EMA)
+--EMAi = (EMAi-1*(n-1)+2*Pi) / (n+1)
 --ds - DataSource - таблица свечек
 --idp - точность округления
 function MovingAverage:fEMA(Index, Period, ds, idp) 

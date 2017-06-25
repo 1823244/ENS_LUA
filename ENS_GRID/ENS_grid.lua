@@ -40,6 +40,7 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Strategies\\StrategyOLE.lua")
 dofile (getScriptPath().."\\Classes\\SettingsGRID.lua")
 dofile (getScriptPath().."\\Classes\\HelperGRID.lua")--вспомогательные функции только для этого робота
 
+dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\EMA.lua")
 
 dofile (getScriptPath() .. "\\quik_table_wrapper.lua")
 
@@ -67,6 +68,8 @@ local processed_orders = {} --таблица обработанных заявок
 
 local db = nil --подключение к базе SQLite
 
+
+
 function OnInit(path)
 	trader = Trader()
 	trader:Init(path)
@@ -93,6 +96,13 @@ function OnInit(path)
 	logstoscreen:Init(settings.log_position, extended) 	
 	
 	db = sqlite3.open(settings.db_path)
+	
+	--отключаем паранойю в сохранности данных, чтобы ускорить insert. по мотивам http://pawno.su/showthread.php?t=105737 (осторожнее, там сайт открывает всплывающие окна!)
+	--результат: до выклчюения 50 записей вставлялись 5 секунд, после - 1 секунду и это, похоже не предел, я большее количество записей не проверял
+	db:exec('PRAGMA journal_mode = OFF')
+	db:exec('PRAGMA synchronous = OFF')
+	
+	
 	helperGrid.db = db
 	
 	--создадим таблицы для ведения логов и сигналов в SQLite
@@ -103,7 +113,7 @@ function OnInit(path)
 end
 
 --это не обработчик события, а просто функция покупки/продажи
-function BuySell(row)
+function buySell(row)
 
 	local SecCodeBox= window:GetValueByColName(row, 'Ticker').image
 	local ClassCode 	= window:GetValueByColName(row, 'Class').image
@@ -172,7 +182,7 @@ end
 
 
 --обработчик даблклика по ячейке Buy. т.е. просто покупка/продажа по рынку
-function BuySell_no_trans_id(row, dir)
+function buySell_no_trans_id(row, dir)
 
 	local SecCodeBox 	= window:GetValueByColName(row, 'Ticker').image
 	local ClassCode 	= window:GetValueByColName(row, 'Class').image
@@ -210,16 +220,49 @@ function BuySell_no_trans_id(row, dir)
 	
 end
 
+function OnConnected(flag)
+  --http://www.kamynin.ru/2015/02/11/lua-proverka-podklyucheniya-k-serveru-quik/
+  --[[
+    Проблема обычно в том, что после подключения т е когда isconnected уже сработал,
+    терминал осуществляет загрузку данных с сервера.
+    Т е если Вы по сигналу isConnected запустите скрипт,
+    то можете получить пустые окна графиков и пустые таблицы.
+    приведенный алгоритм позволяет запускать скрипт после загрузки исходных данных.
+    Т е данный алгоритм определяет не только наличие соединения, но и приход исходных данных.
+    Поэтому isConnected можно не использовать.
+    Вообще-то, я использую колбек- OnConnected и данный алгоритм.  
+  --]]
+  
+  --При написании роботов на LUA для терминала QUIK возникает проблема запуска робота после подключения к серверу.
+  --Данную проблему можно решить следующим образом.
+  
+  
+  --[[
+  local i=200 
+  local s=getInfoParam('SERVERTIME')
+  
+  while i>=0 and s=='' do 
+    i=i-1
+    sleep(200)
+    s=getInfoParam('SERVERTIME')
+  end
+ 
+  local is_run = true  --флаг работы скрипта, пока истина - скрипт работает
+  --]]
+ 
+end
+
+
 
 --колбэк
 function OnStop(s)
 
-	StopScript()
+	stopScript()
 	
 end 
 
 --закрывает окна и выключает флаг работы скрипта
-function StopScript()
+function stopScript()
 
 	is_run = false
 	window:Close()
@@ -242,27 +285,26 @@ end
 --]]
 
 --рефакторинг. запуск в работу одного инструмента
-function StartStopRow(row)
+function startStopRow(row)
 
-	local col = window:GetColNumberByName('StartStop')
 	if window:GetValueByColName(row, 'StartStop').image == 'start' then
-		helperGrid:Red(window.hID, row, col)
-		SetCell(window.hID, row, col, 'stop')
+		helperGrid:Red(window.hID, row, window:GetColNumberByName('StartStop'))
+
+		window:SetValueByColName(row, 'StartStop', 'stop')
 		window:SetValueByColName(row, 'current_state', 'waiting for a signal')
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'StartStopRow() инструмент запущен в работу')
 	else
-		helperGrid:Green(window.hID, row, col)
-		SetCell(window.hID, row, col, 'start')
-		window:SetValueByColName(row, 'current_state', '')
+		helperGrid:Green(window.hID, row, window:GetColNumberByName('StartStop'))
+		window:SetValueByColName(row, 'StartStop', 'start')
+		window:SetValueByColName(row, 'current_state', 'stopped')
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'StartStopRow() инструмент остановлен')
+		window:SetValueByColName(row, 'LastPrice', tostring(0))
 	end
 end
 
 
 --событие, возникающее после отправки заявки на сервер
 function OnTransReply(trans_reply)
-
-	logstoscreen:add2(nil, nil, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds() ..', trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status))
 
 	--помещаем номер заявки в таблицу Orders, в строку с текущим trans_id
 	local s = orders:GetSize()
@@ -278,19 +320,17 @@ function OnTransReply(trans_reply)
 		end
 	end
 	
+  logstoscreen:add2(window, rowNum, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds() ..', trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status))
+
 	if trans_reply.status == 2 or trans_reply.status > 3 then
-		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) ..', '..helperGrid:StatusByNumber(trans_reply.status) )
-		
-		logstoscreen:add2(nil, nil, nil,nil,nil,nil,  'подробное сообщение к предыдущей строке: '.. trans_reply.result_msg)
-		
-		message('error ticker '..window:GetValueByColName(rowNum, 'Ticker').image .. ': '..tostring(trans_reply.status))
+		logstoscreen:add2(window, rowNum, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) ..', '..helperGrid:StatusByNumber(trans_reply.status) )
+		logstoscreen:add2(window, rowNum, nil,nil,nil,nil,  'подробное сообщение к предыдущей строке: '.. trans_reply.result_msg)
 		
 		--выключаем инструмент, по которому пришла ошибка
 		if rowNum~=nil then
-			window:SetValueByColName(rowNum, 'StartStop', 'start')--turn off
-			window:SetValueByColName(rowNum, 'current_state', '')--turn off
-			helperGrid:Green(window.hID, row, window:GetColNumberByName('StartStop'))
-			logstoscreen:add2(windows, rowNum, nil,nil,nil,nil,  'instrument was turned off because of the error code '..tostring(trans_reply.status))
+			window:SetValueByColName(rowNum, 'StartStop', 'stop')--turn off
+			startStopRow(rowNum)
+			logstoscreen:add2(window, rowNum, nil,nil,nil,nil,  'instrument was turned off because of the error code '..tostring(trans_reply.status))
 		end
 	end
 	
@@ -314,14 +354,17 @@ function OnTrade(trade)
 		processed_trades[#processed_trades+1] = trade.trade_num
 	end
 		
-	logstoscreen:add2(nil, nil, nil,nil,nil,nil,'OnTrade() '..helper:getMiliSeconds() ..', trans_id = '..tostring(trade.trans_id) .. ', number = ' ..tostring(trade.trade_num).. ', order number = ' ..tostring(trade.order_num))
 	
 	
 	--добавим количество из сделки в колонку qty_fact главной таблицы
-	local s = orders:GetSize()
-	for i = 1, s do
+ 
+	for i = orders:GetSize(),1,-1 do
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trade.trans_id) 
 			and tostring(orders:GetValue(i, 'order').image) == tostring(trade.order_num) then
+
+        logstoscreen:add2(window, i, nil,nil,nil,nil,'OnTrade() '..helper:getMiliSeconds() ..', trans_id = '..tostring(trade.trans_id) .. ', number = ' ..tostring(trade.trade_num).. ', order number = ' ..tostring(trade.order_num))
+
+
 			orders:SetValue(i, 'trade', trade.trade_num)
 			local qty_fact = orders:GetValue(i, 'qty_fact').image
 			if qty_fact == nil or qty_fact == '' then
@@ -358,8 +401,16 @@ function OnOrder(order)
 		processed_orders[#processed_orders+1] = order.order_num
 	end
 	
-	--logstoscreen:add2(window, row, nil,nil,nil,nil,'onOrder '..helper:getMiliSeconds())
-	logstoscreen:add2(nil, nil, nil,nil,nil,nil,'OnOrder() '..helper:getMiliSeconds() ..', trans_id = '..tostring(order.trans_id) .. ', number = ' ..tostring(order.order_num))
+  for i = orders:GetSize(),1,-1 do
+    if tostring(orders:GetValue(i, 'trans_id').image) == tostring(order.trans_id) 
+      and tostring(orders:GetValue(i, 'order').image) == tostring(order.order_num) then
+
+        logstoscreen:add2(window, i, nil,nil,nil,nil,'OnOrder() '..helper:getMiliSeconds() ..', trans_id = '..tostring(order.trans_id) .. ', number = ' ..tostring(order.order_num))
+
+      break
+    end
+  end
+	
 	
 end
 
@@ -391,17 +442,17 @@ local f_cb = function( t_id,  msg,  par1, par2)
 			--message("Start",1)
 			if x["image"]=="start" then
 				--StartRow(par1, par2)
-				StartStopRow(par1)
+				startStopRow(par1)
 			else
 				--Stop but not closed
-				StartStopRow(par1)
+				startStopRow(par1)
 			end
 		elseif (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('BuyMarket') then
 			--message('buy')
-			BuySell_no_trans_id(par1, 'buy')
+			buySell_no_trans_id(par1, 'buy')
 		elseif (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('SellMarket') then
 			--message('buy')
-			BuySell_no_trans_id(par1, 'sell')
+			buySell_no_trans_id(par1, 'sell')
 		elseif (msg==QTABLE_LBUTTONDBLCLK) and par2 == window:GetColNumberByName('test_buy') then
 			--message('buy')
 			window:SetValueByColName(par1, 'test_buy', 'true')
@@ -418,7 +469,7 @@ local f_cb = function( t_id,  msg,  par1, par2)
 		--window:Close()
 		--is_run = false
 		--working = false
-		StopScript()
+		stopScript()
 	end
 
 	--закрытие окна робота кнопкой ESC
@@ -428,14 +479,14 @@ local f_cb = function( t_id,  msg,  par1, par2)
 			--window:Close()
 			--is_run=false
 			--working = false
-			StopScript()
+			stopScript()
 		end
 	end	
 
 end 
 
 --читает из настроек таблицу инструментов и добавляет строки с ними в главную таблицу
-function AddRowsToMainWindow()
+function addRowsToMainWindow()
 
 	local List = settings:instruments_list() --Это двумерный массив (таблица)
 	
@@ -475,12 +526,23 @@ function AddRowsToMainWindow()
 		local minStepPrice = getParamEx(List[row][6], 	List[row][3], "SEC_PRICE_STEP").param_value + 0
 		window:SetValueByColName(rowNum, 'minStepPrice', tostring(minStepPrice))
 		
+		
 	end  
 
 end
 
+
+
+
+  
+
+
 --главная функция робота, которая гоняется в цикле
 function main()
+
+
+
+
 
 	if settings.invert_deals == true then
 		message('включено инвертирование сделок!!!',3)
@@ -545,7 +607,7 @@ function main()
 	--НАСТРОЙКИ ПОКА ЗАДАЮТСЯ ЗДЕСЬ!!!!
 	
 	--добавляем строки с инструментами в главную таблицу
-	AddRowsToMainWindow()
+	addRowsToMainWindow()
 
 	
 	--обработчик событий главной таблицы
@@ -555,7 +617,8 @@ function main()
 	local col = window:GetColNumberByName('StartStop')
 	for row=1, GetTableSize(window.hID) do
 		if settings.start_all == true then
-			StartStopRow(row)
+			startStopRow(row)
+    
 		end
 	end
 	
@@ -573,6 +636,7 @@ function main()
 
 end
 
+
 --+-----------------------------------------------
 --|			ОСНОВНОЙ АЛГОРИТМ
 --+-----------------------------------------------
@@ -584,6 +648,32 @@ function main_loop(row)
 		--window:InsertValue("Сигнал", "Not connected")
 		return
 	end
+	
+	---[[
+	
+	--еще одна проверка по мотивам http://www.kamynin.ru/2015/02/11/lua-proverka-podklyucheniya-k-serveru-quik/
+	--если в программе надо проверить подключение, то это лучше делать так:
+	if getInfoParam('SERVERTIME')=='' then
+		-- подключения нет
+		return false
+	else
+		--есть подключение
+	end
+	--]]
+  
+	  --[[ проверка попадания в торговое окно
+	  local serv_time=tonumber(HelperGrid:timeformat(getInfoParam("SERVERTIME"))) -- помещение в переменную времени сервера в формате HHMMSS
+	  if not (serv_time>=10000 and serv_time<235000) then
+		return false
+	  end 	
+		--]]
+		
+	
+	if window:GetValueByColName(row, 'StartStop').image =='start'  then --инструмент выключен. когда включен, там будет Stop
+		return
+	end
+
+
 	
 	local sec = window:GetValueByColName(row, 'Ticker').image
 	local class = window:GetValueByColName(row, 'Class').image
@@ -642,11 +732,8 @@ function main_loop(row)
 	window:SetValueByColName(row, 'PricePred', strategy.PriceSeries[0].close)
 	window:SetValueByColName(row, 'Price', strategy.PriceSeries[1].close)
 	
-	local working = window:GetValueByColName(row, 'StartStop').image 
-	
-	if working=='start'  then --инструмент выключен. когда включен, там будет Stop
-		return
-	end
+	--
+
 		
 		
 	-------------------------------------------------------------------
@@ -685,7 +772,7 @@ function processSignal(row)
 		planQuantity = -1*planQuantity --сделаем отрицательным
 	end
 	
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'plan quantity: ' .. tostring(planQuantity))
+	
 	
 	--посмотреть, сколько уже лотов/контрактов есть в позиции (валюту для СЭЛТ пока оставим пустой, главное - сделать базовый функционал)
 	local factQuantity = trader:GetCurrentPosition(window:GetValueByColName(row, 'Ticker').image, window:GetValueByColName(row, 'Account').image, window:GetValueByColName(row, 'Class').image)
@@ -707,6 +794,8 @@ function processSignal(row)
 			planQuantity = 0
 		end
 	end
+	
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'plan quantity: ' .. tostring(planQuantity))
 	
 	local signal_id = window:GetValueByColName(row, 'signal_id').image
 	
@@ -767,10 +856,11 @@ function processSignal(row)
 		window:SetValueByColName(row, 'savedPosition', tostring(factQuantity))
 		
 		--универсальная функция покупки/продажи
-		BuySell(row)
+		buySell(row)
 		
 		--после отправки транзакции на биржу меняем состояние робота на то, в котором он ждет ответа на выставленную заявку
 		window:SetValueByColName(row, 'current_state', 'waiting for a response')
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'after buySell')
 
 	else
 		--logstoscreen:add2(window, row, nil,nil,nil,nil,'вся позиция уже набрана, заявка не отправлена!')
@@ -803,8 +893,7 @@ function wait_for_response(row)
 
 	---[[
 	
-	local s = orders:GetSize()
-	for i = 1, s do
+	for i = orders:GetSize(),1,-1 do
 		
 		local trans_id = window:GetValueByColName(row, 'trans_id').image
 		
@@ -942,6 +1031,7 @@ function wait_for_signal(row)
 	
 end
 
+
 --[[	ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
 сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
 т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю эту свечу.
@@ -964,6 +1054,7 @@ function find_signal(row, candle_date, candle_time)
 	end
 	return false
 end
+
 
 --+-----------------------------------------------
 --|			ОСНОВНОЙ АЛГОРИТМ - КОНЕЦ
@@ -1011,6 +1102,10 @@ function signal_buy(row)
 --]]	
 end
 
+
+
+
+
 function signal_sell(row)
 
 --  Ma1 = Ma1Series[1].close						--предыдущая свеча
@@ -1039,4 +1134,7 @@ function signal_sell(row)
 	end
 
 end
+
+
+
 

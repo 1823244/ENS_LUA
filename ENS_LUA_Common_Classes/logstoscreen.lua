@@ -1,4 +1,5 @@
---СЌС‚РѕС‚ РєР»Р°СЃСЃ СЃРѕР·РґР°РµС‚ С‚Р°Р±Р»РёС†Сѓ СЃ Р»РѕРіР°РјРё Рё РїРѕРєР°Р·С‹РІР°РµС‚ РµРµ РІ С‚РµСЂРјРёРЅР°Р»Рµ
+--этот класс создает таблицу с логами и показывает ее в терминале
+--также он дублирует логи в таблицу SQLite
 helper = {}
 helperGrid = {}
 
@@ -8,7 +9,7 @@ end)
 
 --Parameters
 --position - table, coordinates of window x, y, dx, dy. for function SetWindowPos
---extended - boolean - РµСЃР»Рё Р”Р°, С‚Рѕ СЃРѕР·РґР°РµС‚СЃСЏ СЂР°СЃС€РёСЂРµРЅРЅР°СЏ С‚Р°Р±Р»РёС†Р°, СЃ РїРѕР»СЏРјРё РґР»СЏ СЃС‡РµС‚Р° Рё Р±СѓРјР°РіРё
+--extended - boolean - если Да, то создается расширенная таблица, с полями для счета и бумаги
 function LogsToScreen:Init(position, extended)
 
 	helper = Helper()
@@ -56,9 +57,9 @@ function LogsToScreen:CloseTable()
 	
 end
 
---РІС‹РІРѕРґРёС‚ РёРЅС„РѕСЂРјР°С†РёСЋ РІ СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р»РѕРі
---window - РєР»Р°СЃСЃ СЃ РіР»Р°РІРЅРѕР№ С‚Р°Р±Р»РёС†РµР№
---row - С‡РёСЃР»Рѕ, РЅРѕРјРµСЂ СЃС‚СЂРѕРєРё РІ РіР»Р°РІРЅРѕР№ С‚Р°Р±Р»РёС†Рµ
+--выводит информацию в расширенный лог
+--window - класс с главной таблицей
+--row - число, номер строки в главной таблице
 function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
 
 	local timetolog = os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2())
@@ -82,6 +83,7 @@ function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
 	window:SetValueByColName(rowNum, 'Class', class)
 	window:SetValueByColName(rowNum, 'Message_', text)
 
+  --добавим запись в лог SQLite
 	helperGrid:addRowToLogsSQLite(row, timetolog, account, depo, sec, class, text) 
   
 end

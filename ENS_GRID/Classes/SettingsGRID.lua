@@ -26,7 +26,7 @@ function Settings:Init()
   --ниже идет геометрия экрана
   
   self.main_position = {x=50,y=105,dx=1300,dy=400} --позиция главного окна
-  self.log_position = {x=810,y=420,dx=700,dy=300} --позиция окна логов
+  self.log_position = {x=50,y=500,dx=1300,dy=300} --позиция окна логов
   
   self.signals_position = {x=810,y=10,dx=700,dy=200} --позиция окна сигналов
   self.orders_position = {x=810,y=210,dx=700,dy=200} --позиция окна заявок
@@ -117,7 +117,7 @@ function Settings:instruments_list()
 	row, secList = addOneInstrumentToTable(row, {'ROSNEFT',	'', 'ROSN', 10, 'long',   'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'SBER',	'', 'SBER', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'MECHEL',	'', 'MTLR', 10, 'long',   'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
-	row, secList = addOneInstrumentToTable(row, {'AEROFLOT','', 'AFLT', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
+	row, secList = addOneInstrumentToTable(row, {'AEROFLOT','', 'AFLT', 10, 'long', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'ALROSA',	'', 'ALRS', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'FSK',		'', 'FEES', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'RUSHYDRO','', 'HYDR', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)

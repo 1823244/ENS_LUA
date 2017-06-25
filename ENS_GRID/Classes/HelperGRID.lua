@@ -439,5 +439,15 @@ function HelperGrid:StatusByNumber(number)
 
 end
 
-
-
+--помещение в переменную времени сервера в формате HHMMSS
+--http://o-s-a.net/posts/qlua.html
+function HelperGrid:timeformat(time_unf)
+     local in1, in2=0,0
+     local time_form=0      
+     in1=string.find(time_unf,":" , 0)
+     if in1~=nil and in1~=0 then
+        in2=string.find(time_unf,":" , in1+1) 
+        time_form=string.sub(time_unf, 0 ,in1-1)..string.sub(time_unf, in1+1 ,in2-1)..string.sub(time_unf, in2+1 ,string.len(time_unf))
+     end
+     return time_form
+end
