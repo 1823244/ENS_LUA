@@ -1,18 +1,29 @@
+ma =
+{
+    -- Exponential Moving Average (EMA)
+    -- EMA[i] = (EMA[i]-1*(per-1)+2*X[i]) / (per+1)
+    -- Ïאנאלוענû:
+    -- period - Ïונטמה סךמכüחÿשוי סנוהםוי
+    -- get - פףםךצטÿ ס מהםטל ןאנאלוענמל (םמלונ ג גûבמנךו), גמחגנאשא‏שאÿ חםאקוםטו גûבמנךט
+    -- Âמחגנאשאוע לאססטג, ןנט מבנאשוםט‏ ך ךמעמנמלף בףהוע נאססקטעûגאעüסÿ עמכüךמ םומבץמהטלûי ‎כולוםע
+    -- Ïנט ןמגעמנםמל מבנאשוםטט בףהוע גמחגנאשוםמ ףזו נאססקטעאםםמו חםאקוםטו
+    ema =
+        function(period,get) 
+            return setmetatable( 
+                        {},
+                        { __index = function(tbl,indx)
+                                              if indx == 1 then
+                                                  tbl[indx] = get(1)
+                                              else
+                                                  tbl[indx] = (tbl[indx-1] * (period-1) + 2 * get(indx)) / (period + 1)
+                                              end
+                                              return tbl[indx]
+                                            end
+                        })
+       end
+}
 
---Äכÿ גסוץ סךמכüחÿשטץ סנוהםטץ סמחהא¸ל ןנמסענאםסעגמ טלום  ס טלוםול ma. Ïמלושאול ג םודמ ןונגף‏ פףםךצט‏, גûקטסכÿ‏שף‏ ‎ךסןמםוםצטאכüםף‏ סךמכüחÿשף‏ סנוהם‏‏.
-ma={ema=function(period,get) 
-            return setmetatable( 
-{},
-                        { __index = function(tbl,indx)
-                                              if indx == 1 then
-                                                  tbl[indx] = get(1)
-                                              else
-                                                  tbl[indx] = (tbl[indx-1] * (period-1) + 2 * get(indx)) / (period + 1)
-                                              end
-                                              return tbl[indx]
-                                            end
-                        })
-       end
+
 
 
 

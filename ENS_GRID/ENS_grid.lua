@@ -14,6 +14,8 @@
 --window:SetValueByColName(row, 'LastPrice', tostring(security.last))
 --получение значения из ячейки
 --local acc = window:GetValueByColName(row, 'Account').image
+--запись в лог
+--logstoscreen:add2(window, row, nil,nil,nil,nil,'message to log')
 
 local sqlite3 = require("lsqlite3")
 
@@ -54,6 +56,7 @@ strategy={}
 security={}
 window={}
 logstoscreen={}
+EMAclass = {}
 
 logs={}
 
@@ -110,6 +113,8 @@ function OnInit(path)
 	helperGrid:create_sqlite_table_signals()
 	helperGrid:create_sqlite_table_Logs()
 		
+	EMAclass=MovingAverage()
+	EMAclass:Init()
 end
 
 --это не обработчик события, а просто функция покупки/продажи
@@ -699,6 +704,29 @@ function main_loop(row)
 	local tPrice,n,s = getCandlesByIndex(IdPriceCombo,0,NumCandles-3, 2)		
 	strategy:SetSeries(tPrice)
 
+	--[[ тренировка расчет средней по статье http://bot4sale.ru/blog-menu/qlua/spisok-statej/487-coffee.html
+	--статья говно, см. след строку
+	--возьмем последние 150 свечей, иначе будет !!! 'C stack overflow' !!!
+	local tPriceEMA,n1,s1 = getCandlesByIndex(IdPriceCombo,0,NumCandles-151,NumCandles)		
+	tPriceEMAclose = {}
+	
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'#tPriceEMA '..tostring(#tPriceEMA))
+	--заберем из tPriceEMA последние 100 свечей, т.к. если их там будет 8000, то ema выдаст 'C stack overflow'
+	for i = 1, #tPriceEMA do
+		
+		tPriceEMAclose[i] = tPriceEMA[i].close
+		
+		--logstoscreen:add2(window, row, nil,nil,nil,nil,'[time]: '..tostring(tPriceEMA[#tPriceEMA-limit].datetime.hour)..':'..tostring(tPriceEMA[#tPriceEMA-limit].datetime.min))
+	end
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'[i]: '..tostring(#tPriceEMAclose))
+	
+	--local sEMA = EMAclass.ma.ema(60, function(i) return tPriceEMAclose[i] end)
+	local sEMA = ma.ema(60, function(i) return tPriceEMAclose[i] end)
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'Price last '..tostring(tPriceEMAclose[#tPriceEMAclose])..', '..'EMA last: '..tostring(sEMA[#tPriceEMAclose]))
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'Price pred '..tostring(tPriceEMAclose[#tPriceEMAclose-1])..', '..'EMA pred: '..tostring(sEMA[#tPriceEMAclose-1]))
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'Price pred pred '..tostring(tPriceEMAclose[#tPriceEMAclose-2])..', '..'EMA pred pred: '..tostring(sEMA[#tPriceEMAclose-2]))
+	--]]
+	
 	local IdMA = window:GetValueByColName(row, 'MA60name').image
 	
 	--далее пошли запрашивать цены с графика moving averages
@@ -756,6 +784,37 @@ function main_loop(row)
 	end
 
 end
+
+--[[ тренировка расчет средней по статье http://bot4sale.ru/blog-menu/qlua/spisok-statej/487-coffee.html
+
+статья говно
+
+ma =
+{
+    -- Exponential Moving Average (EMA)
+    -- EMA[i] = (EMA[i]-1*(per-1)+2*X[i]) / (per+1)
+    -- Параметры:
+    -- period - Период скользящей средней
+    -- get - функция с одним параметром (номер в выборке), возвращающая значение выборки
+    -- Возвращает массив, при обращению к которому будет рассчитываться только необходимый элемент
+    -- При повторном обращении будет возвращено уже рассчитанное значение
+	-- РЕКУРСИЯ!!!
+    ema =
+        function(period,get) 
+            return setmetatable( 
+                        {},
+                        { __index = function(tbl,indx)
+                                              if indx == 1 then
+                                                  tbl[indx] = get(1)
+                                              else
+                                                  tbl[indx] = (tbl[indx-1] * (period-1) + 2 * get(indx)) / (period + 1)
+                                              end
+                                              return tbl[indx]
+                                            end
+                        })
+       end
+}
+--]]
 
 --обработать сигнал
 function processSignal(row)

@@ -56,6 +56,7 @@ function Settings:instruments_list()
 	--раз в квартал мен€ть код мес€ца
   
 	local row = 1
+	---[[
 	--индексы
 	row, secList = addOneInstrumentToTable(row, {'RTS',     'RI', 'RIU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'MICEX',   'MX', 'MXU7', 2, 'revers', 'SPBFUT', 'SPBFUT00f19', 'SPBFUT00f19', 'start'}, secList)
@@ -110,7 +111,9 @@ function Settings:instruments_list()
     --валюты
 	row, secList = addOneInstrumentToTable(row, {'USD',  '' , 'USD000UTSTOM', 2, 'revers', 'CETS', '11267', 'MB1000100002', 'stop'}, secList)
     
+	--]]
     --акции на споте
+	---[[
 	row, secList = addOneInstrumentToTable(row, {'GAZPROM',	'', 'GAZP', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'GMK',		'', 'GMKN', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'LUKOIL',	'', 'LKOH', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
@@ -124,6 +127,7 @@ function Settings:instruments_list()
 	row, secList = addOneInstrumentToTable(row, {'MOEXSPOT','', 'MOEX', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'SURGUT',	'', 'SNGS', 10, 'long', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'YANDEX',	'', 'YNDX', 10, 'revers', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
+	--]]
 	row, secList = addOneInstrumentToTable(row, {'VTB',		'', 'VTBR', 10, 'long', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'MTS',		'', 'MTSS', 10, 'long', 'QJSIM', '11267', 'NL0011100043', 'start'}, secList)
 
