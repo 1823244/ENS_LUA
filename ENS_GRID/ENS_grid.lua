@@ -859,7 +859,14 @@ function processSignal(row)
 		buySell(row)
 		
 		--после отправки транзакции на биржу меняем состояние робота на то, в котором он ждет ответа на выставленную заявку
-		window:SetValueByColName(row, 'current_state', 'waiting for a response')
+		--здесь может сложиться ситуация, когда buySell() будет исполняться долго, а в ответ ей придет,
+		--что заявка не может быть исполнена. в этом случае OnTransReply() поставит состояние 'stopped',
+		--а здесь мы должны проверить, установлено оно или нет, чтобы не поменять на 'waiting for a response',
+		--т.к. это ошибка
+		if window:GetValueByColName(row, 'signal_id').image ~= 'stopped' then
+			window:SetValueByColName(row, 'current_state', 'waiting for a response')
+		end
+		--for debug
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'after buySell')
 
 	else
