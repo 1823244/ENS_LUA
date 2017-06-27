@@ -367,7 +367,7 @@ function OnTrade(trade)
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trade.trans_id) 
 			and tostring(orders:GetValue(i, 'order').image) == tostring(trade.order_num) then
 
-        logstoscreen:add2(window, i, nil,nil,nil,nil,'OnTrade() '..helper:getMiliSeconds() ..', trans_id = '..tostring(trade.trans_id) .. ', number = ' ..tostring(trade.trade_num).. ', order number = ' ..tostring(trade.order_num))
+        logstoscreen:add2(window, tonumber(orders:GetValue(i, 'row').image), nil,nil,nil,nil,'OnTrade() '..helper:getMiliSeconds() ..', trans_id = '..tostring(trade.trans_id) .. ', number = ' ..tostring(trade.trade_num).. ', order number = ' ..tostring(trade.order_num))
 
 
 			orders:SetValue(i, 'trade', trade.trade_num)
@@ -410,7 +410,7 @@ function OnOrder(order)
     if tostring(orders:GetValue(i, 'trans_id').image) == tostring(order.trans_id) 
       and tostring(orders:GetValue(i, 'order').image) == tostring(order.order_num) then
 
-        logstoscreen:add2(window, i, nil,nil,nil,nil,'OnOrder() '..helper:getMiliSeconds() ..', trans_id = '..tostring(order.trans_id) .. ', number = ' ..tostring(order.order_num))
+        logstoscreen:add2(window, tonumber(orders:GetValue(i, 'row').image), nil,nil,nil,nil,'OnOrder() '..helper:getMiliSeconds() ..', trans_id = '..tostring(order.trans_id) .. ', number = ' ..tostring(order.order_num))
 
       break
     end
@@ -623,7 +623,8 @@ function main()
 	for row=1, GetTableSize(window.hID) do
 		if settings.start_all == true then
 			startStopRow(row)
-    
+		else
+			helperGrid:Green(window.hID, row, window:GetColNumberByName('StartStop'))
 		end
 	end
 	
@@ -673,10 +674,7 @@ function main_loop(row)
 	  end 	
 		--]]
 		
-	
-	if window:GetValueByColName(row, 'StartStop').image =='start'  then --инструмент выключен. когда включен, там будет Stop
-		return
-	end
+
 
 
 	
@@ -762,8 +760,12 @@ function main_loop(row)
 	
 	--
 
-		
-		
+	--если строка выключена то можно проверить это здесь, а можно чуть дальше, чтобы сигналы все же показывались
+	--[[
+	if window:GetValueByColName(row, 'StartStop').image =='start'  then --инструмент выключен. когда включен, там будет Stop
+		return
+	end		
+	--]]	
 	-------------------------------------------------------------------
 	--			ОСНОВНОЙ АЛГОРИТМ
 	-------------------------------------------------------------------
@@ -775,12 +777,17 @@ function main_loop(row)
 		
 	elseif current_state == 'processing signal' then
 		--в этом состоянии робот шлет заявки на сервер, пока не наберет позицию или не кончится время или количество попыток
-		processSignal(row)
+		if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
+			processSignal(row)
+		end		
+	
+		
 		
 	elseif current_state == 'waiting for a response' then
 		--заявку отправили, ждем пока придет ответ, перед отправкой новой
-		wait_for_response(row)
-		
+		if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
+			wait_for_response(row)
+		end
 	end
 
 end
@@ -1093,7 +1100,9 @@ function wait_for_signal(row)
 	--]]
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
-	window:SetValueByColName(row, 'current_state', 'processing signal')
+	if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
+		window:SetValueByColName(row, 'current_state', 'processing signal')
+	end
 	
 end
 
