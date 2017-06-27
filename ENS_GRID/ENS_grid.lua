@@ -120,10 +120,10 @@ end
 --это не обработчик события, а просто функция покупки/продажи
 function buySell(row)
 
-	local SecCodeBox= window:GetValueByColName(row, 'Ticker').image
+	local SecCodeBox	= window:GetValueByColName(row, 'Ticker').image
 	local ClassCode 	= window:GetValueByColName(row, 'Class').image
 	local ClientBox 	= window:GetValueByColName(row, 'Account').image
-	local DepoBox 	= window:GetValueByColName(row, 'Depo').image
+	local DepoBox 		= window:GetValueByColName(row, 'Depo').image
 	--идентификатор транзакции нужен обязательно, чтобы потом можно было понять, на какую транзакцию пришел ответ
 	local trans_id 		= tonumber(window:GetValueByColName(row, 'trans_id').image)
 	--
@@ -902,21 +902,8 @@ function processSignal(row)
 		
 		window:SetValueByColName(row, 'qty', tostring(qty))
 		
-		--для визуального контроля пишем информацию о заявке во вспомогательную таблицу
-		--заменил код в комменте на вызов функции
+		--для визуального контроля пишем информацию о заявке во вспомогательную таблицу		
 		helperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, qty, window) 
-		--[[
-		local newR = orders:AddLine()
-		orders:SetValue(newR, "row", 			row)
-		orders:SetValue(newR, "trans_id", 		trans_id)
-		orders:SetValue(newR, "signal_id", 		signal_id)
-		orders:SetValue(newR, "sig_dir", 		signal_direction)
-		orders:SetValue(newR, "qty", 			qty)	--количество в заявке, потом будем сравнивать с ним количество из колонки qty_fact
-		orders:SetValue(newR, "sec_code", 		window:GetValueByColName(row, 'Ticker').image)
-		orders:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
-		orders:SetValue(newR, "account", 		window:GetValueByColName(row, 'Account').image)
-		orders:SetValue(newR, "depo", 			window:GetValueByColName(row, 'Depo').image)
-		--]]
 		
 		--сохраним "старую" позицию
 		window:SetValueByColName(row, 'savedPosition', tostring(factQuantity))
@@ -936,6 +923,7 @@ function processSignal(row)
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'after buySell')
 
 	else
+		--позиция набрана
 		--logstoscreen:add2(window, row, nil,nil,nil,nil,'вся позиция уже набрана, заявка не отправлена!')
 		
 		window:SetValueByColName(row, 'current_state', 'waiting for a signal')
@@ -956,8 +944,53 @@ function processSignal(row)
 		
 		window:SetValueByColName(row, 'trans_id', nil)
 		window:SetValueByColName(row, 'signal_id', nil)
+		
+		--+------------------------------
+		--|		ставим стоп лосс
+		--+------------------------------
+		
+		--send_stop_loss(row)
+		
 	end
 	
+end
+
+function send_stop_loss(row)
+
+	local seccode 	= window:GetValueByColName(row, 'Ticker').image
+	local class 	= window:GetValueByColName(row, 'Class').image
+	local client 	= window:GetValueByColName(row, 'Account').image
+	local depo 		= window:GetValueByColName(row, 'Depo').image
+	local sig_dir 	= window:GetValueByColName(row, 'sig_dir').image
+	
+	local operation = 'S'
+	if sig_dir == 'buy' then
+		operation 	= 'B'
+	end
+	
+	security.class = class
+	security.code = seccode
+	security:Update()
+	
+	local stop_price = 0
+	--стоп цена будет отличаться от текущей на 1%
+	if sig_dir == 'buy' then
+		stop_price = tonumber(security.last) - helper:round_to_step(tonumber(security.last)* 0.01,security.minStepPrice) 
+	else
+		stop_price = tonumber(security.last) + helper:round_to_step(tonumber(security.last)* 0.01,security.minStepPrice) 
+	end
+	--цена выставления заявки - еще на 1% выше/ниже стоп-цены
+	local price		= 0
+	if sig_dir == 'buy' then
+		price = stop_price - helper:round_to_step(stop_price* 0.01,security.minStepPrice) --по этой цене будем продавать
+	else
+		price = stop_price + helper:round_to_step(stop_price* 0.01,security.minStepPrice) --по этой цене будем покупать
+	end		
+	local quantity 	= 1		
+	local trans_id 	= helper:getMiliSeconds_trans_id()
+	
+	transactions:StopLimitWithId(seccode, class, client, depo, operation, stop_price, price, quantity, trans_id)
+		
 end
 
 --ждать ответа на отправленную заявку
@@ -1054,12 +1087,14 @@ function wait_for_signal(row)
 	
 	local sig_dir = nil
 	if signal_buy == true then 
+		
 		--закрытие свечи выше средней - покупка
 		if settings.invert_deals == false then
 			sig_dir='buy'
 		else
 			sig_dir='sell'
 		end
+		message(sig_dir)
 		
 	elseif signal_sell == true	then 
 		--закрытие часовика ниже средней - продажа
@@ -1079,25 +1114,6 @@ function wait_for_signal(row)
 	
 	--код ниже в комменте заменен на этот вызов функции
 	helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, strategy.PriceSeries[1].close, strategy.Ma1, false) 
-	--[[
-	local newR = signals:AddLine()
-	signals:SetValue(newR, "row", row)
-	signals:SetValue(newR, "id", 	signal_id)
-	signals:SetValue(newR, "dir", 	sig_dir)
-	
-	signals:SetValue(newR, "account", 	window:GetValueByColName(row, 'Account').image)
-	signals:SetValue(newR, "depo", 	window:GetValueByColName(row, 'Depo').image)
-
-	signals:SetValue(newR, "sec_code", 	window:GetValueByColName(row, 'Ticker').image)
-	signals:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
-	
-	signals:SetValue(newR, "date", candle_date)
-	signals:SetValue(newR, "time", 	candle_time) 
-	signals:SetValue(newR, "price", strategy.PriceSeries[1].close)
-	--signals:SetValue(newR, "MA", 	EMA_TMP[#EMA_TMP-1])
-	signals:SetValue(newR, "price", strategy.Ma1)
-	signals:SetValue(newR, "done", false)
-	--]]
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
 	if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
@@ -1105,7 +1121,6 @@ function wait_for_signal(row)
 	end
 	
 end
-
 
 --[[	ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
 сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
@@ -1176,10 +1191,6 @@ function signal_buy(row)
 	end
 --]]	
 end
-
-
-
-
 
 function signal_sell(row)
 

@@ -118,7 +118,10 @@ function Helper:round(num, idp)
   local mult = 10 ^ (idp or 0)
   return math.floor(num * mult + 0.5) / mult
 end
-
+--ЕНС округляет до шага цены
+function Helper:round_to_step(what,step)
+   return what - what % step
+end
 
 --ENS без секунд
 function Helper:getHRTime5()
