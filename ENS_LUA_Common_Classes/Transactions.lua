@@ -7,7 +7,7 @@ function Transactions:Init()
   self.dateForStop = "0"
 end
 function Transactions:order(seccode, class, operation, client, depo, price, qty)
-  transaction = {
+  local transaction = {
     CLASSCODE = class,
     ACTION = "NEW_ORDER",
     ACCOUNT = depo,
@@ -18,14 +18,14 @@ function Transactions:order(seccode, class, operation, client, depo, price, qty)
     QUANTITY = tostring(qty),
     TRANS_ID = "1"
   }
-  res = sendTransaction(transaction)
+  local res = sendTransaction(transaction)
   if res ~= "" then
   --функция возвращает строку только в случае ошибки. Результат транзакции можно получить, воспользовавшись функцией обратного вызова OnTransReply.
 	message("order sent. "..res, 1)
   end
 end
 function Transactions:orderWithId(seccode, class, operation, client, depo, price, qty, id)
-  transaction = {
+  local transaction = {
     CLASSCODE = class,
     ACTION = "NEW_ORDER",
     ACCOUNT = depo,
@@ -36,11 +36,11 @@ function Transactions:orderWithId(seccode, class, operation, client, depo, price
     QUANTITY = tostring(qty),
     TRANS_ID = tostring(id)
   }
-  res = sendTransaction(transaction)
+  local res = sendTransaction(transaction)
   message(res, 1)
 end
 function Transactions:StopPlusTakeProfit(client, depo, operation, price, stop_price, stopprice2, OFFSET, OFFSET_UNITS, SPREAD, SPREAD_UNITS, quantity, seccode, classcode, dateForSTop)
-  transaction = {
+  local transaction = {
     ACCOUNT = depo,
     CLIENT_CODE = client,
     ACTION = "NEW_STOP_ORDER",
@@ -60,11 +60,11 @@ function Transactions:StopPlusTakeProfit(client, depo, operation, price, stop_pr
     EXPIRY_DATE = dateForSTop,
     TRANS_ID = "1"
   }
-  res = sendTransaction(transaction)
+  local res = sendTransaction(transaction)
   message(res, 1)
 end
 function Transactions:BindedStop(client, depo, operation, price, stop_price, linkedPrice, quantity, seccode, classcode)
-  transaction = {
+  local transaction = {
     ACCOUNT = depo,
     CLIENT_CODE = client,
     ACTION = "NEW_STOP_ORDER",
@@ -80,11 +80,11 @@ function Transactions:BindedStop(client, depo, operation, price, stop_price, lin
     KILL_IF_LINKED_ORDER_PARTLY_FILLED = "NO",
     TRANS_ID = "1"
   }
-  res = sendTransaction(transaction)
+  local res = sendTransaction(transaction)
   message(res, 1)
 end
 function Transactions:TakeProfit(client, depo, operation, stop_price, OFFSET, SPREAD, UNITS, position, dateForSTop, seccode, classcode)
-  transaction = {
+  local transaction = {
     ACCOUNT = depo,
     CLIENT_CODE = client,
     ACTION = "NEW_STOP_ORDER",
@@ -103,17 +103,17 @@ function Transactions:TakeProfit(client, depo, operation, stop_price, OFFSET, SP
     COMMENT = "",
     TRANS_ID = tostring(1)
   }
-  res = sendTransaction(transaction)
+  local  res = sendTransaction(transaction)
   message(res, 1)
 end
 function Transactions:CalcDateForStop()
-  timeServer = getInfoParam("SERVERTIME")
-  secondServer = string.sub(timeServer, 7, 8)
-  CurDate = getInfoParam("TRADEDATE")
-  Second = secondServer
-  curDay = tonumber(string.sub(CurDate, 1, 2)) + 10
-  curMonth = tonumber(string.sub(CurDate, 4, 5))
-  curYear = tonumber(string.sub(CurDate, 7, 10)) + 0
+  local timeServer = getInfoParam("SERVERTIME")
+  local secondServer = string.sub(timeServer, 7, 8)
+  local CurDate = getInfoParam("TRADEDATE")
+  local Second = secondServer
+  local curDay = tonumber(string.sub(CurDate, 1, 2)) + 10
+  local curMonth = tonumber(string.sub(CurDate, 4, 5))
+  local curYear = tonumber(string.sub(CurDate, 7, 10)) + 0
   if curDay > 28 then
     curMonth = curMonth + 1
     curDay = 10
@@ -131,26 +131,26 @@ function Transactions:CalcDateForStop()
   self.dateForStop = curYear .. curMonth .. curDay
 end
 function Transactions:CalcId()
-  timeServer = getInfoParam("SERVERTIME")
-  secondServer = string.sub(timeServer, 7, 8)
-  minuteServer = string.sub(timeServer, 4, 5)
-  hourServer = string.sub(timeServer, 1, 2)
-  idServer = hourServer * 10000 + minuteServer * 100 + secondServer
+  local timeServer = getInfoParam("SERVERTIME")
+  local secondServer = string.sub(timeServer, 7, 8)
+  local minuteServer = string.sub(timeServer, 4, 5)
+  local hourServer = string.sub(timeServer, 1, 2)
+  local idServer = hourServer * 10000 + minuteServer * 100 + secondServer
   return idServer
 end
 function Transactions:CalcDiffSeconds(time1, time2)
-  secondServer1 = tonumber(string.sub(time1, 5, 6))
-  minuteServer1 = tonumber(string.sub(time1, 3, 4)) * 60
-  hourServer1 = tonumber(string.sub(time1, 1, 2)) * 60 * 60
-  idServer1 = hourServer1 + minuteServer1 + secondServer1
-  secondServer2 = tonumber(string.sub(time2, 5, 6))
-  minuteServer2 = tonumber(string.sub(time2, 3, 4)) * 60
-  hourServer2 = tonumber(string.sub(time2, 1, 2)) * 60 * 60
-  idServer2 = hourServer2 + minuteServer2 + secondServer2
+  local secondServer1 = tonumber(string.sub(time1, 5, 6))
+  local minuteServer1 = tonumber(string.sub(time1, 3, 4)) * 60
+  local hourServer1 = tonumber(string.sub(time1, 1, 2)) * 60 * 60
+  local idServer1 = hourServer1 + minuteServer1 + secondServer1
+  local secondServer2 = tonumber(string.sub(time2, 5, 6))
+  local minuteServer2 = tonumber(string.sub(time2, 3, 4)) * 60
+  local hourServer2 = tonumber(string.sub(time2, 1, 2)) * 60 * 60
+  local idServer2 = hourServer2 + minuteServer2 + secondServer2
   return idServer1 - idServer2
 end
 function Transactions:StopLimit(operation, stop_price, price, quantity)
-  transaction = {
+  local transaction = {
     CLASSCODE = self.Class,
     ACTION = "NEW_STOP_ORDER",
     ACCOUNT = self.Depo,
@@ -163,11 +163,11 @@ function Transactions:StopLimit(operation, stop_price, price, quantity)
     TRANS_ID = tostring(1),
     EXPIRY_DATE = "GTC"
   }
-  res = sendTransaction(transaction)
+  local res = sendTransaction(transaction)
   message(res, 1)
 end
 function Transactions:StopLimitWithId(seccode, class, client, depo, operation, stop_price, price, quantity, id)
-  transaction = {
+  local transaction = {
     CLASSCODE = class,
     ACTION = "NEW_STOP_ORDER",
     ACCOUNT = depo,
@@ -180,12 +180,12 @@ function Transactions:StopLimitWithId(seccode, class, client, depo, operation, s
     TRANS_ID = tostring(id),
     EXPIRY_DATE = "GTC"
   }
-  res = sendTransaction(transaction)
+  local res = sendTransaction(transaction)
   message(res, 1)
 end
 function Transactions:killAllOrders(code, class)
   for i = 0, getNumberOf("orders") - 1 do
-    stopOrder = getItem("orders", i)
+    local stopOrder = getItem("orders", i)
     if tostring(stopOrder.seccode) == code and bit.band(stopOrder.flags, 3) == 1 then
       self:killOrder(stopOrder.ordernum, code, class)
     end
@@ -193,7 +193,7 @@ function Transactions:killAllOrders(code, class)
 end
 function Transactions:killAllOrdersByClient(code, class, client)
   for i = 0, getNumberOf("orders") - 1 do
-    stopOrder = getItem("orders", i)
+    local stopOrder = getItem("orders", i)
     if tostring(stopOrder.client_code) == client and tostring(stopOrder.seccode) == code and bit.band(stopOrder.flags, 3) == 1 then
       self:killOrder(stopOrder.ordernum, code, class)
     end
@@ -201,7 +201,7 @@ function Transactions:killAllOrdersByClient(code, class, client)
 end
 function Transactions:killAllStopOrdersByClient(code, class, client)
   for i = 0, getNumberOf("stop_orders") - 1 do
-    stopOrder = getItem("stop_orders", i)
+    local stopOrder = getItem("stop_orders", i)
     if tostring(stopOrder.client_code) == client and tostring(stopOrder.seccode) == code and bit.band(stopOrder.flags, 3) == 1 then
       message("Kill " .. tostring(stopOrder.ordernum), 1)
       self:killStopOrder(stopOrder.ordernum, code, class)
@@ -209,9 +209,9 @@ function Transactions:killAllStopOrdersByClient(code, class, client)
   end
 end
 function Transactions:GetStopsCount(code, class, client)
-  counter = 0
+  local counter = 0
   for i = 0, getNumberOf("stop_orders") - 1 do
-    stopOrder = getItem("stop_orders", i)
+    local stopOrder = getItem("stop_orders", i)
     if tostring(stopOrder.client_code) == client and tostring(stopOrder.seccode) == code and bit.band(stopOrder.flags, 3) == 1 then
       counter = counter + 1
     end
@@ -220,7 +220,7 @@ function Transactions:GetStopsCount(code, class, client)
 end
 function Transactions:killAllStopOrders(code, class)
   for i = 0, getNumberOf("stop_orders") - 1 do
-    stopOrder = getItem("stop_orders", i)
+    local stopOrder = getItem("stop_orders", i)
     if tostring(stopOrder.seccode) == code and bit.band(stopOrder.flags, 3) == 1 then
       message("Kill " .. tostring(stopOrder.ordernum), 1)
       self:killStopOrder(stopOrder.ordernum, code, class)
@@ -228,23 +228,24 @@ function Transactions:killAllStopOrders(code, class)
   end
 end
 function Transactions:killStopOrder(number, code, class)
-  kill_order_trans = {
+  local kill_order_trans = {
     CLASSCODE = class,
     SECCODE = code,
     ACTION = "KILL_STOP_ORDER",
     STOP_ORDER_KEY = tostring(number),
     TRANS_ID = tostring(1)
   }
-  sendTransaction(kill_order_trans)
+  local res = sendTransaction(kill_order_trans)
+  message(res, 1)
 end
 function Transactions:killOrder(number, code, class)
-  kill_order_trans = {
+  local kill_order_trans = {
     CLASSCODE = class,
     SECCODE = code,
     ACTION = "KILL_ORDER",
     ORDER_KEY = tostring(number),
     TRANS_ID = tostring(1)
   }
-  res = sendTransaction(kill_order_trans)
+  local res = sendTransaction(kill_order_trans)
   message(res, 1)
 end
