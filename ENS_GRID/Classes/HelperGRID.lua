@@ -5,6 +5,7 @@ end)
 
 function HelperGrid:Init()
 	self.orders = {}
+	self.stop_orders = {}
 	self.signals = {}
 	self.db = nil
 	self.logstoscreen = nil
@@ -67,6 +68,12 @@ function HelperGrid:createTableSignals()
 	
 	signals:Show()
 	
+	if settings.signals_position ~= nil then
+		if settings.signals_position.x ~= nil and settings.signals_position.y ~= nil and settings.signals_position.dx~=nil and settings.signals_position.dy ~= nil then
+			SetWindowPos(signals.t_id, settings.signals_position.x, settings.signals_position.y, settings.signals_position.dx, settings.signals_position.dy)
+		end 
+	end
+	
 	return true
 	
 end
@@ -100,11 +107,67 @@ function HelperGrid:createTableOrders()
 	
 	self.orders = orders
 	
+
+	
 	orders:Show()
+	
+	if settings.orders_position ~= nil then
+		if settings.orders_position.x ~= nil and settings.orders_position.y ~= nil and settings.orders_position.dx~=nil and settings.orders_position.dy ~= nil then
+			SetWindowPos(orders.t_id, settings.orders_position.x, settings.orders_position.y, settings.orders_position.dx, settings.orders_position.dy)
+		end 
+	end
 	
 	return true
 	
 end
+
+function HelperGrid:createTableStopOrders()
+	
+	local stop_orders = QTable.new()
+	if not stop_orders then
+		message("error creation table stop_orders!", 3)
+		return false
+	else
+		--message("table with id = " ..stop_orders.t_id .. " created", 1)
+	end
+	
+	stop_orders:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	stop_orders:AddColumn("signal_id",		QTABLE_INT_TYPE, 1)
+	stop_orders:AddColumn("sig_dir",		QTABLE_CACHED_STRING_TYPE, 1)
+	stop_orders:AddColumn("account",		QTABLE_CACHED_STRING_TYPE, 10)
+	stop_orders:AddColumn("depo",			QTABLE_CACHED_STRING_TYPE, 10)
+	stop_orders:AddColumn("sec_code",		QTABLE_CACHED_STRING_TYPE, 10)
+	stop_orders:AddColumn("class_code",		QTABLE_CACHED_STRING_TYPE, 10)
+	stop_orders:AddColumn("trans_id",		QTABLE_INT_TYPE, 12)
+	stop_orders:AddColumn("order",			QTABLE_INT_TYPE, 12) --order number
+	stop_orders:AddColumn("trade",			QTABLE_INT_TYPE, 10)
+	
+	stop_orders:AddColumn("robot_id",		QTABLE_STRING_TYPE, 10)
+	
+	
+	stop_orders:SetCaption("stop_orders")
+	
+	self.stop_orders = stop_orders
+	
+	stop_orders:Show()
+	
+	---[[
+	if settings.stop_orders_position ~= nil then
+		if settings.stop_orders_position.x ~= nil and settings.stop_orders_position.y ~= nil and settings.stop_orders_position.dx~=nil and settings.stop_orders_position.dy ~= nil then
+			SetWindowPos(stop_orders.t_id, settings.stop_orders_position.x, settings.stop_orders_position.y, settings.stop_orders_position.dx, settings.stop_orders_position.dy)
+		end 
+	end
+	--]]
+	
+	
+	
+	return true
+	
+end
+
+
+
+
 
 
 --создает таблицу в базе SQLite. если таблица уже есть - она не пересоздается
@@ -266,6 +329,25 @@ function HelperGrid:addRowToSignals(row, trans_id, signal_id, signal_direction, 
 	self:addRowToSignalsSQLite(row, trans_id, signal_id, signal_direction, window, candle_date, candle_time, price, MA, done) 
 	
 end
+
+--добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite
+function HelperGrid:addRowToStopOrders(row, trans_id, window) 
+		
+	local newR = self.stop_orders:AddLine()
+	
+	self.stop_orders:SetValue(newR, "row", 			row)
+	self.stop_orders:SetValue(newR, "trans_id", 	trans_id)
+	
+	self.stop_orders:SetValue(newR, "sec_code", 	window:GetValueByColName(row, 'Ticker').image)
+	self.stop_orders:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
+	self.stop_orders:SetValue(newR, "account", 		window:GetValueByColName(row, 'Account').image)
+	self.stop_orders:SetValue(newR, "depo", 		window:GetValueByColName(row, 'Depo').image)
+	self.stop_orders:SetValue(newR, "robot_id", 	settings.robot_id)
+	
+	--self:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window) 
+end
+
+
 
 
 --добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite

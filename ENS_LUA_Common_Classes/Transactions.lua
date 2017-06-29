@@ -178,7 +178,8 @@ function Transactions:StopLimitWithId(seccode, class, client, depo, operation, s
     STOPPRICE = tostring(stop_price),
     QUANTITY = tostring(quantity),
     TRANS_ID = tostring(id),
-    EXPIRY_DATE = "GTC"
+    --EXPIRY_DATE = "GTC"
+	EXPIRY_DATE = "TODAY"
   }
   local res = sendTransaction(transaction)
   message(res, 1)
@@ -227,14 +228,26 @@ function Transactions:killAllStopOrders(code, class)
     end
   end
 end
-function Transactions:killStopOrder(number, code, class)
-  local kill_order_trans = {
-    CLASSCODE = class,
-    SECCODE = code,
-    ACTION = "KILL_STOP_ORDER",
-    STOP_ORDER_KEY = tostring(number),
-    TRANS_ID = tostring(1)
-  }
+function Transactions:killStopOrder(number, code, class, trans_id)
+	
+	local kill_order_trans = {}
+	if trans_id~=nil then
+	  kill_order_trans = {
+		CLASSCODE = class,
+		SECCODE = code,
+		ACTION = "KILL_STOP_ORDER",
+		STOP_ORDER_KEY = tostring(number),
+		TRANS_ID = tostring(trans_id)
+	  }
+	else
+	  kill_order_trans = {
+			CLASSCODE = class,
+			SECCODE = code,
+			ACTION = "KILL_STOP_ORDER",
+			STOP_ORDER_KEY = tostring(number)
+			
+		  }	
+	end
   local res = sendTransaction(kill_order_trans)
   message(res, 1)
 end

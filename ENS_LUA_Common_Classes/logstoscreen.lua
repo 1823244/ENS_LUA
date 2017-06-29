@@ -18,6 +18,7 @@ function LogsToScreen:Init(position, extended)
 	helperGrid= HelperGrid()
 	helperGrid:Init()
   
+	--[[
 	local columns = {}
 	window = Window()
 	if extended ~= nil then
@@ -34,12 +35,57 @@ function LogsToScreen:Init(position, extended)
 	else
 		window:Init('LOGS:: '..settings.TableCaption, columns)
 	end
+	--]]
+ 
+	self.logs_window = nil
+	self:createTableLogs()
  
  --[[ local strTime = os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2())
   helper:AppendInFile(settings.logFile, strTime ..'\n')
   helper:AppendInFile(settings.logFile, strTime ..' Robot started \n')
   helper:AppendInFile(settings.logFile, strTime ..'\n')
   --]]
+end
+
+function LogsToScreen:createTableLogs()
+	
+	local logs_window = QTable.new()
+	if not logs_window then
+		message("error creation table logs_window!", 3)
+		return false
+	else
+		--message("table with id = " ..logs_window.t_id .. " created", 1)
+	end
+	
+	
+	logs_window:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	logs_window:AddColumn("Time_",			QTABLE_STRING_TYPE, 20)
+	logs_window:AddColumn("robot_id",		QTABLE_CACHED_STRING_TYPE, 1)
+	logs_window:AddColumn("Account",		QTABLE_CACHED_STRING_TYPE, 1)
+	logs_window:AddColumn("Depo",			QTABLE_CACHED_STRING_TYPE, 1)
+	logs_window:AddColumn("Sec",			QTABLE_CACHED_STRING_TYPE, 10)
+	logs_window:AddColumn("Class",			QTABLE_CACHED_STRING_TYPE, 1)
+	logs_window:AddColumn("Message_",		QTABLE_STRING_TYPE, 200)
+	
+	
+	logs_window:SetCaption("logs_window")
+	
+	self.logs_window = logs_window
+	
+	logs_window:Show()
+	
+	---[[
+	if settings.log_position ~= nil then
+		if settings.log_position.x ~= nil and settings.log_position.y ~= nil and settings.log_position.dx~=nil and settings.log_position.dy ~= nil then
+			SetWindowPos(logs_window.t_id, settings.log_position.x, settings.log_position.y, settings.log_position.dx, settings.log_position.dy)
+		end 
+	end
+	--]]
+	
+	self.logs_window = logs_window
+	
+	return true
+	
 end
 
 function LogsToScreen:add(text)
@@ -53,7 +99,8 @@ end
 
 function LogsToScreen:CloseTable()
 
-	window:Close()
+	--window:Close()
+	DestroyTable(self.logs_window.t_id)
 	
 end
 
@@ -73,6 +120,7 @@ function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
 		depo 	= main_window:GetValueByColName(row, 'Depo').image
 	end
   
+  --[[
 	local rowNum = InsertRow(window.hID, -1)
 		
 	window:SetValueByColName(rowNum, 'Time_',timetolog)
@@ -82,7 +130,23 @@ function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
 	window:SetValueByColName(rowNum, 'Sec', sec)
 	window:SetValueByColName(rowNum, 'Class', class)
 	window:SetValueByColName(rowNum, 'Message_', text)
+--]]
 
+	local newR = self.logs_window:AddLine()
+	
+	self.logs_window:SetValue(newR, "row", 			row)
+	self.logs_window:SetValue(newR, "Time_", 		timetolog)
+	self.logs_window:SetValue(newR, "robot_id", 	settings.robot_id)
+	
+	self.logs_window:SetValue(newR, "Sec", 			sec)
+	self.logs_window:SetValue(newR, "Class", 		class)
+	self.logs_window:SetValue(newR, "Account", 		account)
+	self.logs_window:SetValue(newR, "Depo", 		depo)
+	
+	self.logs_window:SetValue(newR, "Message_", 	text)
+	
+	
+	
   --добавим запись в лог SQLite
 	helperGrid:addRowToLogsSQLite(row, timetolog, account, depo, sec, class, text) 
   

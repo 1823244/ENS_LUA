@@ -64,6 +64,7 @@ local is_run = true	--флаг работы скрипта, пока истина - скрипт работает
 
 local signals = {} --таблица обработанных сигналов.	
 local orders = {} --таблица заявок
+local stop_orders = {} --таблица стоп-лоссов
 
 --эти таблицы нужны для того, чтобы не обрабатывать повторные колбэки на одни и те же сделки/заявки
 local processed_trades = {} --таблица обработанных сделок
@@ -274,7 +275,8 @@ function stopScript()
 	
 	logstoscreen:CloseTable()
 	DestroyTable(signals.t_id)
-	DestroyTable(orders.t_id)	
+	DestroyTable(orders.t_id)
+	DestroyTable(stop_orders.t_id)
 	
 end
 
@@ -314,18 +316,34 @@ function OnTransReply(trans_reply)
 	--помещаем номер заявки в таблицу Orders, в строку с текущим trans_id
 	local s = orders:GetSize()
 	local rowNum=nil
-	for i = 1, s do
+	local found = false
+	for i = s, 1, -1 do
 		--здесь придется обойтись без строки в главной таблице - row, т.к. в контексте этой функции невозможно понять, по какой строке пришел колбэк
 		--но это не будет проблемой, т.к. trans_id вполне однозначно определяет по какому инструменту ждем ответ
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_reply.trans_id) then
 			orders:SetValue(i, 'order', trans_reply.order_num)
 			--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTransReply - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
 			rowNum=tonumber(orders:GetValue(i, 'row').image)
+			found = true
 			break
 		end
 	end
 	
-  logstoscreen:add2(window, rowNum, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds() ..', trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status))
+	--для стоп-лосса
+	if found == false then
+		--помещаем номер заявки в таблицу stop_orders, в строку с текущим trans_id
+		local s = stop_orders:GetSize()
+		for i = s, 1, -1 do
+			if tostring(stop_orders:GetValue(i, 'trans_id').image) == tostring(trans_reply.trans_id) then
+				stop_orders:SetValue(i, 'order', trans_reply.order_num)
+				--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTransReply - trans_id '..tostring(stop_orders:GetValue(i, 'trans_id').image))
+				rowNum=tonumber(stop_orders:GetValue(i, 'row').image)
+				break
+			end
+		end	
+	end
+	
+	logstoscreen:add2(window, rowNum, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds() ..', trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status))	
 
 	if trans_reply.status == 2 or trans_reply.status > 3 then
 		logstoscreen:add2(window, rowNum, nil,nil,nil,nil,  'ERROR trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status) ..', '..helperGrid:StatusByNumber(trans_reply.status) )
@@ -553,6 +571,42 @@ function main()
 		message('включено инвертирование сделок!!!',3)
 		logstoscreen:add2(window, nil, nil,nil,nil,nil,'включено инвертирование сделок!!!')
 	end
+	
+	
+	
+	
+	
+	--создаем вспомогательные таблицы
+---------------------------------------------------------------------------	
+	--signals
+	if helperGrid:createTableSignals() == false then
+		return
+	end
+
+	signals = helperGrid.signals
+	
+---------------------------------------------------------------------------	
+	--orders
+	if helperGrid:createTableOrders() == false then
+		return
+	end	
+	
+	orders = helperGrid.orders
+
+---------------------------------------------------------------------------	
+	--stop orders
+	if helperGrid:createTableStopOrders() == false then
+		return
+	end	
+	
+	stop_orders = helperGrid.stop_orders
+	
+---------------------------------------------------------------------------		
+	
+	
+	
+	
+	
 	--создаем окно робота с таблицей и добавляем в эту таблицу строки
 	window = Window()									--функция Window() расположена в файле Window.luac и создает класс
 	
@@ -578,36 +632,11 @@ function main()
 	--current_state - текущее состояние по инструменту
 	--signal_id - идентификатор сигнала
 	--savedPosition - число - сюда сохраняем позицию перед отправкой транзакции, а потом в функции ожидания ответа проверяем, поменялось ли это количество
+	--stop_order_id - пользовательский ИД для стоп-лосса
+	local t = {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition', 'stop_order_id'}
+	window:Init(settings.TableCaption, t, settings.main_position)
+	
 
-	window:Init(settings.TableCaption, {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition'}, settings.main_position)
-	
-	--создаем вспомогательные таблицы
----------------------------------------------------------------------------	
-	if helperGrid:createTableSignals() == false then
-		return
-	end
-
-	signals = helperGrid.signals
-	
-	if settings.signals_position ~= nil then
-		if settings.signals_position.x ~= nil and settings.signals_position.y ~= nil and settings.signals_position.dx~=nil and settings.signals_position.dy ~= nil then
-			SetWindowPos(signals.t_id, settings.signals_position.x, settings.signals_position.y, settings.signals_position.dx, settings.signals_position.dy)
-		end 
-	end
----------------------------------------------------------------------------	
-	if helperGrid:createTableOrders() == false then
-		return
-	end	
-	
-	orders = helperGrid.orders
-	
-	if settings.orders_position ~= nil then
-		if settings.orders_position.x ~= nil and settings.orders_position.y ~= nil and settings.orders_position.dx~=nil and settings.orders_position.dy ~= nil then
-			SetWindowPos(orders.t_id, settings.orders_position.x, settings.orders_position.y, settings.orders_position.dx, settings.orders_position.dy)
-		end 
-	end
-	
-		
 	
 	--НАСТРОЙКИ ПОКА ЗАДАЮТСЯ ЗДЕСЬ!!!!
 	
@@ -949,7 +978,10 @@ function processSignal(row)
 		--|		ставим стоп лосс
 		--+------------------------------
 		
-		--send_stop_loss(row)
+		--сначала удаляем несработавший стоп лосс (если он, конечно, есть)
+		kill_stop_loss(row)
+		--потом ставим новый
+		send_stop_loss(row)
 		
 	end
 	
@@ -963,9 +995,9 @@ function send_stop_loss(row)
 	local depo 		= window:GetValueByColName(row, 'Depo').image
 	local sig_dir 	= window:GetValueByColName(row, 'sig_dir').image
 	
-	local operation = 'S'
+	local operation = 'B'
 	if sig_dir == 'buy' then
-		operation 	= 'B'
+		operation 	= 'S'
 	end
 	
 	security.class = class
@@ -975,22 +1007,64 @@ function send_stop_loss(row)
 	local stop_price = 0
 	--стоп цена будет отличаться от текущей на 1%
 	if sig_dir == 'buy' then
-		stop_price = tonumber(security.last) - helper:round_to_step(tonumber(security.last)* 0.01,security.minStepPrice) 
+		stop_price = tonumber(security.last) - helper:round_to_step(tonumber(security.last)* 0.005,security.minStepPrice) 
 	else
-		stop_price = tonumber(security.last) + helper:round_to_step(tonumber(security.last)* 0.01,security.minStepPrice) 
+		stop_price = tonumber(security.last) + helper:round_to_step(tonumber(security.last)* 0.005,security.minStepPrice) 
 	end
 	--цена выставления заявки - еще на 1% выше/ниже стоп-цены
 	local price		= 0
 	if sig_dir == 'buy' then
-		price = stop_price - helper:round_to_step(stop_price* 0.01,security.minStepPrice) --по этой цене будем продавать
+		price = stop_price - helper:round_to_step(stop_price* 0.005,security.minStepPrice) --по этой цене будем продавать
 	else
-		price = stop_price + helper:round_to_step(stop_price* 0.01,security.minStepPrice) --по этой цене будем покупать
+		price = stop_price + helper:round_to_step(stop_price* 0.005,security.minStepPrice) --по этой цене будем покупать
 	end		
 	local quantity 	= 1		
 	local trans_id 	= helper:getMiliSeconds_trans_id()
 	
+	helperGrid:addRowToStopOrders(row, trans_id, window) 
+	
 	transactions:StopLimitWithId(seccode, class, client, depo, operation, stop_price, price, quantity, trans_id)
 		
+	window:SetValueByColName(row, 'stop_order_id', tostring(trans_id))
+	
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'stop loss '..tostring(trans_id)..' was sent')
+	
+end
+
+function kill_stop_loss(row)
+
+	--получаем id стоп_лосса из главной таблицы
+	local stop_id = window:GetValueByColName(row, 'stop_order_id').image
+	if stop_id == nil or stop_id == 'nil' or stop_id == '' or stop_id == ' ' or stop_id == 0 then
+		return
+	end	
+	
+	--сначала нужно найти номер стоп-лосса в таблице stop_orders по id
+	local s = stop_orders:GetSize()
+	local rowNum=nil
+	local number = nil
+	for i = s, 1, -1 do
+		--здесь придется обойтись без строки в главной таблице - row, т.к. в контексте этой функции невозможно понять, по какой строке пришел колбэк
+		--но это не будет проблемой, т.к. trans_id вполне однозначно определяет по какому инструменту ждем ответ
+		if tostring(stop_orders:GetValue(i, 'trans_id').image) == tostring(stop_id) then
+			rowNum=tonumber(stop_orders:GetValue(i, 'row').image)
+			number=tonumber(stop_orders:GetValue(i, 'order').image)
+			break
+		end
+	end		
+
+	if number~=nil then
+		
+		local seccode 	= window:GetValueByColName(row, 'Ticker').image
+		local class 	= window:GetValueByColName(row, 'Class').image
+		
+		transactions:killStopOrder(stop_id, seccode, class, stop_id)
+		
+		window:SetValueByColName(row, 'stop_order_id', ' ')--заметаем следы
+		
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'stop loss '..tostring(stop_id)..' was killed')
+	end
+	
 end
 
 --ждать ответа на отправленную заявку
@@ -1094,7 +1168,7 @@ function wait_for_signal(row)
 		else
 			sig_dir='sell'
 		end
-		message(sig_dir)
+		--message(sig_dir)
 		
 	elseif signal_sell == true	then 
 		--закрытие часовика ниже средней - продажа

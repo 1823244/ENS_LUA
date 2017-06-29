@@ -16,7 +16,7 @@ function Settings:Init()
   self.start_all = true
   
   self.Path = ""
-  self.TableCaption=""
+  self.TableCaption="MAIN::ENS_GRID_OLE"
   self.rejim=""
   helper = Helper()
   helper:Init()
@@ -25,11 +25,13 @@ function Settings:Init()
   
   --ниже идет геометрия экрана
   
-  self.main_position = {x=50,y=105,dx=1300,dy=400} --позиция главного окна
-  self.log_position = {x=50,y=500,dx=1300,dy=300} --позиция окна логов
+  self.main_position = {x=0,y=0,dx=800,dy=400} --позиция главного окна
+  self.log_position = {x=0,y=401,dx=800,dy=300} --позиция окна логов
   
   self.signals_position = {x=810,y=10,dx=700,dy=200} --позиция окна сигналов
   self.orders_position = {x=810,y=210,dx=700,dy=200} --позиция окна заявок
+  
+  self.stop_orders_position = {x=810,y=410, dx=700,dy=200} --позиция окна стоп-лоссов
   
   self.db_path = getScriptPath() .. "\\ens_grid.db"
   self.robot_id = 'ENS_GRID_01'
