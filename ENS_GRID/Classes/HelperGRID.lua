@@ -88,20 +88,21 @@ function HelperGrid:createTableOrders()
 		--message("table with id = " ..orders.t_id .. " created", 1)
 	end
 	
-	orders:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
+	orders:AddColumn("row",				QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
 	orders:AddColumn("signal_id",		QTABLE_INT_TYPE, 10)
-	orders:AddColumn("sig_dir",		QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("account",		QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("sig_dir",			QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("account",			QTABLE_CACHED_STRING_TYPE, 10)
 	orders:AddColumn("depo",			QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("sec_code",	QTABLE_CACHED_STRING_TYPE, 10)
-	orders:AddColumn("class_code",	QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("sec_code",		QTABLE_CACHED_STRING_TYPE, 10)
+	orders:AddColumn("class_code",		QTABLE_CACHED_STRING_TYPE, 10)
 	orders:AddColumn("trans_id",		QTABLE_INT_TYPE, 10)
 	orders:AddColumn("order",			QTABLE_INT_TYPE, 10)
 	orders:AddColumn("trade",			QTABLE_INT_TYPE, 10)
-	orders:AddColumn("qty",			QTABLE_INT_TYPE, 10) --количество из заявки
+	orders:AddColumn("qty",				QTABLE_INT_TYPE, 10) --количество из заявки
 	orders:AddColumn("qty_fact",		QTABLE_INT_TYPE, 10) --количество из сделок
 	orders:AddColumn("robot_id",		QTABLE_STRING_TYPE, 10)
-	
+	orders:AddColumn("is_stop_order",	QTABLE_INT_TYPE, 10)--1 yes, 0 no
+	orders:AddColumn("trans_reply",		QTABLE_STRING_TYPE, 10)--если была ошибка , то в OnTransReply запишем сюда FAIL
 	
 	orders:SetCaption("orders")
 	
@@ -120,52 +121,6 @@ function HelperGrid:createTableOrders()
 	return true
 	
 end
-
-function HelperGrid:createTableStopOrders()
-	
-	local stop_orders = QTable.new()
-	if not stop_orders then
-		message("error creation table stop_orders!", 3)
-		return false
-	else
-		--message("table with id = " ..stop_orders.t_id .. " created", 1)
-	end
-	
-	stop_orders:AddColumn("row",			QTABLE_INT_TYPE, 5) --номер строки в главной таблице. внешний ключ!!!
-	stop_orders:AddColumn("signal_id",		QTABLE_INT_TYPE, 1)
-	stop_orders:AddColumn("sig_dir",		QTABLE_CACHED_STRING_TYPE, 1)
-	stop_orders:AddColumn("account",		QTABLE_CACHED_STRING_TYPE, 10)
-	stop_orders:AddColumn("depo",			QTABLE_CACHED_STRING_TYPE, 10)
-	stop_orders:AddColumn("sec_code",		QTABLE_CACHED_STRING_TYPE, 10)
-	stop_orders:AddColumn("class_code",		QTABLE_CACHED_STRING_TYPE, 10)
-	stop_orders:AddColumn("trans_id",		QTABLE_INT_TYPE, 12)
-	stop_orders:AddColumn("order",			QTABLE_INT_TYPE, 12) --order number
-	stop_orders:AddColumn("trade",			QTABLE_INT_TYPE, 10)
-	
-	stop_orders:AddColumn("robot_id",		QTABLE_STRING_TYPE, 10)
-	
-	
-	stop_orders:SetCaption("stop_orders")
-	
-	self.stop_orders = stop_orders
-	
-	stop_orders:Show()
-	
-	---[[
-	if settings.stop_orders_position ~= nil then
-		if settings.stop_orders_position.x ~= nil and settings.stop_orders_position.y ~= nil and settings.stop_orders_position.dx~=nil and settings.stop_orders_position.dy ~= nil then
-			SetWindowPos(stop_orders.t_id, settings.stop_orders_position.x, settings.stop_orders_position.y, settings.stop_orders_position.dx, settings.stop_orders_position.dy)
-		end 
-	end
-	--]]
-	
-	
-	
-	return true
-	
-end
-
-
 
 
 
@@ -190,7 +145,8 @@ function HelperGrid:create_sqlite_table_orders()
 			qty			TEXT,
 			qty_fact	TEXT,
 			robot_id	TEXT,
-			reserve1	TEXT,--это запасные поля
+			--это запасные поля
+			reserve1	TEXT, --Это будет признак is_stop_order. для стопов и возможно тейков. 1 yes, 0 no
 			reserve2	TEXT,
 			reserve3	TEXT,
 			reserve4	TEXT,
@@ -283,7 +239,7 @@ end
 
 
 --добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite
-function HelperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, qty, window) 
+function HelperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, qty, window, is_stop_order) 
 		
 	local newR = self.orders:AddLine()
 	
@@ -296,9 +252,10 @@ function HelperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, q
 	self.orders:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
 	self.orders:SetValue(newR, "account", 		window:GetValueByColName(row, 'Account').image)
 	self.orders:SetValue(newR, "depo", 			window:GetValueByColName(row, 'Depo').image)
-	self.orders:SetValue(newR, "robot_id", settings.robot_id)
+	self.orders:SetValue(newR, "robot_id", 		settings.robot_id)
+	self.orders:SetValue(newR, "is_stop_order",	is_stop_order)--1 yes, 0 no
 	
-	self:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window) 
+	self:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window, is_stop_order) 
 end
 
 --добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite
@@ -330,28 +287,11 @@ function HelperGrid:addRowToSignals(row, trans_id, signal_id, signal_direction, 
 	
 end
 
---добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite
-function HelperGrid:addRowToStopOrders(row, trans_id, window) 
-		
-	local newR = self.stop_orders:AddLine()
-	
-	self.stop_orders:SetValue(newR, "row", 			row)
-	self.stop_orders:SetValue(newR, "trans_id", 	trans_id)
-	
-	self.stop_orders:SetValue(newR, "sec_code", 	window:GetValueByColName(row, 'Ticker').image)
-	self.stop_orders:SetValue(newR, "class_code", 	window:GetValueByColName(row, 'Class').image)
-	self.stop_orders:SetValue(newR, "account", 		window:GetValueByColName(row, 'Account').image)
-	self.stop_orders:SetValue(newR, "depo", 		window:GetValueByColName(row, 'Depo').image)
-	self.stop_orders:SetValue(newR, "robot_id", 	settings.robot_id)
-	
-	--self:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window) 
-end
-
 
 
 
 --добавляет строку в таблицу lua, а также вызывает функцию добавления строки в таблицу SQLite
-function HelperGrid:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window) 
+function HelperGrid:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direction, qty, window, is_stop_order) 
 
 	local k = "'"
 	
@@ -366,7 +306,9 @@ function HelperGrid:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direct
 			class_code,
 			trans_id,
 			qty,
-			robot_id)
+			robot_id,
+			reserve1 -- is_stop_order. 1 yes, 0 no
+			)
            VALUES(
 		   ]=]
 		   .. k..tostring(row)..k..','..
@@ -379,6 +321,7 @@ function HelperGrid:addRowToOrdersSQLite(row, trans_id, signal_id, signal_direct
 		    k..tostring(trans_id)..k..','..
 		    k..tostring(qty)..k..','..
 			k..tostring(settings.robot_id)..k..
+			k..tostring(is_stop_order)..k..
 		   
 		   [=[
 		   )

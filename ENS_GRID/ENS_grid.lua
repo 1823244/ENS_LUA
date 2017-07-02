@@ -64,7 +64,7 @@ local is_run = true	--флаг работы скрипта, пока истина - скрипт работает
 
 local signals = {} --таблица обработанных сигналов.	
 local orders = {} --таблица заявок
-local stop_orders = {} --таблица стоп-лоссов
+
 
 --эти таблицы нужны для того, чтобы не обрабатывать повторные колбэки на одни и те же сделки/заявки
 local processed_trades = {} --таблица обработанных сделок
@@ -72,7 +72,13 @@ local processed_orders = {} --таблица обработанных заявок
 
 local db = nil --подключение к базе SQLite
 
+--для более простого включения инструмента в работу будем рассчитывать среднюю скользящую сами
+local EMA_Array = {}--массив рассчитанных свечений индикатора средняя скользящая для одного инструмента
+local TableEMA = {} --таблица с массивам средних скользящих для всех инструментов
+local TableEMAlastCandle = {} -- таблица с последней рассчитанной свечой по ЕМА. чтобы каждый раз с начала не считать
 
+local TableDS= {} --датасурсы для всех инструментов
+local ErrorDS= {}
 
 function OnInit(path)
 	trader = Trader()
@@ -276,7 +282,7 @@ function stopScript()
 	logstoscreen:CloseTable()
 	DestroyTable(signals.t_id)
 	DestroyTable(orders.t_id)
-	DestroyTable(stop_orders.t_id)
+
 	
 end
 
@@ -317,31 +323,24 @@ function OnTransReply(trans_reply)
 	local s = orders:GetSize()
 	local rowNum=nil
 	local found = false
+	local orders_row = nil
 	for i = s, 1, -1 do
+		
 		--здесь придется обойтись без строки в главной таблице - row, т.к. в контексте этой функции невозможно понять, по какой строке пришел колбэк
-		--но это не будет проблемой, т.к. trans_id вполне однозначно определяет по какому инструменту ждем ответ
+		--но это не будет проблемой, т.к. trans_id вполне однозначно определяет по какому инструменту ждем ответ.
+		--не важно, что за заявка - лимитка или стоп-ордер.
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trans_reply.trans_id) then
 			orders:SetValue(i, 'order', trans_reply.order_num)
 			--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTransReply - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
 			rowNum=tonumber(orders:GetValue(i, 'row').image)
 			found = true
+			orders_row = i
 			break
+
 		end
+		
 	end
 	
-	--для стоп-лосса
-	if found == false then
-		--помещаем номер заявки в таблицу stop_orders, в строку с текущим trans_id
-		local s = stop_orders:GetSize()
-		for i = s, 1, -1 do
-			if tostring(stop_orders:GetValue(i, 'trans_id').image) == tostring(trans_reply.trans_id) then
-				stop_orders:SetValue(i, 'order', trans_reply.order_num)
-				--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTransReply - trans_id '..tostring(stop_orders:GetValue(i, 'trans_id').image))
-				rowNum=tonumber(stop_orders:GetValue(i, 'row').image)
-				break
-			end
-		end	
-	end
 	
 	logstoscreen:add2(window, rowNum, nil,nil,nil,nil,'OnTransReply '..helper:getMiliSeconds() ..', trans_id = '..tostring(trans_reply.trans_id) .. ', status = ' ..tostring(trans_reply.status))	
 
@@ -355,6 +354,9 @@ function OnTransReply(trans_reply)
 			startStopRow(rowNum)
 			logstoscreen:add2(window, rowNum, nil,nil,nil,nil,  'instrument was turned off because of the error code '..tostring(trans_reply.status))
 		end
+		
+		--пишем признак ошибки в таблицу Orders
+		orders:SetValue(orders_row, 'trans_reply', 'FAIL')
 	end
 	
 end 
@@ -536,8 +538,8 @@ function addRowsToMainWindow()
 		window:SetValueByColName(rowNum, 'BuyMarket', 'Buy')
 		window:SetValueByColName(rowNum, 'SellMarket', 'Sell')
 		
-		window:SetValueByColName(rowNum, 'MA60name',  	List[row][1] ..'_grid_MA60')
-		window:SetValueByColName(rowNum, 'PriceName', 	List[row][1]..'_grid_price')
+		--window:SetValueByColName(rowNum, 'MA60name',  	List[row][1] ..'_grid_MA60')
+		--window:SetValueByColName(rowNum, 'PriceName', 	List[row][1]..'_grid_price')
 		
 		window:SetValueByColName(rowNum, 'rejim', 		List[row][5])
 		
@@ -592,14 +594,6 @@ function main()
 	end	
 	
 	orders = helperGrid.orders
-
----------------------------------------------------------------------------	
-	--stop orders
-	if helperGrid:createTableStopOrders() == false then
-		return
-	end	
-	
-	stop_orders = helperGrid.stop_orders
 	
 ---------------------------------------------------------------------------		
 	
@@ -655,9 +649,52 @@ function main()
 		else
 			helperGrid:Green(window.hID, row, window:GetColNumberByName('StartStop'))
 		end
+		
+		
+		--для самостоятельного расчета средней будем использовать datasource
+		local class_code =  window:GetValueByColName(row, 'Class').image
+		local sec_code =  window:GetValueByColName(row, 'Ticker').image
+		
+		TableDS[row], ErrorDS[row] = CreateDataSource (class_code, sec_code, INTERVAL_M1) --индексы начинаются с единицы
+
+		if TableDS[row] == nil then
+			logstoscreen:add2(window, row, nil,nil,nil,nil,'error when setting creating DataSource: '..ErrorDS[row])
+		else
+		
+			--установим колбэк на обновление свечек. пока пустой
+			local res= TableDS[row]:SetEmptyCallback()
+			if res == false then
+				logstoscreen:add2(window, row, nil,nil,nil,nil,'error when setting empty callback '..sec_code)
+			end
+			
+			--нужно подождать, пока загрузятся свечки
+			local safecount = 1
+			
+			while TableDS[row]:Size() == 0 do
+				--logstoscreen:add2(window, row, nil,nil,nil,nil,'size of data source: '..tostring(TableDS[row]:Size()))
+				sleep(50)
+				safecount = safecount + 1
+				if safecount > 100 then
+					logstoscreen:add2(window, row, nil,nil,nil,nil,'не дождались обновления рекордсета по инструменту '..sec_code)
+					break
+				end
+			end
+			logstoscreen:add2(window, row, nil,nil,nil,nil,'size of data source: '..tostring(TableDS[row]:Size()))
+		
+		end
+		
+		--сразу посчитаем среднюю
+		
+		TableEMAlastCandle[row] = 0
+		
+		TableEMA[row]={}
+		
+		TableEMA[row], TableEMAlastCandle[row] = EMAclass:emaDS(TableEMA[row], TableDS[row], 60, TableEMAlastCandle[row])
+		
+		--logstoscreen:add2(window, row, nil,nil,nil,nil,'last of EMA array: '..tostring(TableEMA[row][TableEMAlastCandle[row]]))
+		
 	end
 	
-
 	
 	--задержка 100 миллисекунд между итерациями 
 	while is_run do
@@ -666,10 +703,11 @@ function main()
 			main_loop(row)
 		end
 		
-		sleep(1000)
+		sleep(50)
 	end
 
 end
+
 
 
 --+-----------------------------------------------
@@ -704,90 +742,17 @@ function main_loop(row)
 		--]]
 		
 
-
-
+	--рассчитать среднюю самостоятельно
 	
-	local sec = window:GetValueByColName(row, 'Ticker').image
-	local class = window:GetValueByColName(row, 'Class').image
-	
-	security.class = class
-	security.code = sec
-	security:Update()	--обновляет цену последней сделки в таблице security (свойство Last,Close)
+	TableEMA[row], TableEMAlastCandle[row] = EMAclass:emaDS(TableEMA[row], TableDS[row], 60, TableEMAlastCandle[row])
 
-	--помещаем цену в окно робота. просто для визуального наблюдения		
-	window:SetValueByColName(row, 'LastPrice', tostring(security.last))
-
-	local IdPriceCombo = window:GetValueByColName(row, 'PriceName').image   --идентификатор графика цены выбранной бумаги (таблица)
+	window:SetValueByColName(row, 'PricePred', tostring(TableDS[row]:C(TableEMAlastCandle[row]-2)))
+	window:SetValueByColName(row, 'Price',     tostring(TableDS[row]:C(TableEMAlastCandle[row]-1)))
 	
-	--источник комментов [1] - это http://robostroy.ru/community/article.aspx?id=796
-	--[1]Сначала мы получаем количество свечей. здесь: на графике цены
-	NumCandles = getNumCandles(IdPriceCombo)	
-
-	if NumCandles==0 then
-		return 0
-	end
-
-	--СУУ_ЕНС тут запрашиваем 2 предпоследних свечи. последняя не нужна, т.к. она еще не сформирована
-	local tPrice,n,s = getCandlesByIndex(IdPriceCombo,0,NumCandles-3, 2)		
-	strategy:SetSeries(tPrice)
-
-	--[[ тренировка расчет средней по статье http://bot4sale.ru/blog-menu/qlua/spisok-statej/487-coffee.html
-	--статья говно, см. след строку
-	--возьмем последние 150 свечей, иначе будет !!! 'C stack overflow' !!!
-	local tPriceEMA,n1,s1 = getCandlesByIndex(IdPriceCombo,0,NumCandles-151,NumCandles)		
-	tPriceEMAclose = {}
-	
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'#tPriceEMA '..tostring(#tPriceEMA))
-	--заберем из tPriceEMA последние 100 свечей, т.к. если их там будет 8000, то ema выдаст 'C stack overflow'
-	for i = 1, #tPriceEMA do
-		
-		tPriceEMAclose[i] = tPriceEMA[i].close
-		
-		--logstoscreen:add2(window, row, nil,nil,nil,nil,'[time]: '..tostring(tPriceEMA[#tPriceEMA-limit].datetime.hour)..':'..tostring(tPriceEMA[#tPriceEMA-limit].datetime.min))
-	end
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'[i]: '..tostring(#tPriceEMAclose))
-	
-	--local sEMA = EMAclass.ma.ema(60, function(i) return tPriceEMAclose[i] end)
-	local sEMA = ma.ema(60, function(i) return tPriceEMAclose[i] end)
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'Price last '..tostring(tPriceEMAclose[#tPriceEMAclose])..', '..'EMA last: '..tostring(sEMA[#tPriceEMAclose]))
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'Price pred '..tostring(tPriceEMAclose[#tPriceEMAclose-1])..', '..'EMA pred: '..tostring(sEMA[#tPriceEMAclose-1]))
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'Price pred pred '..tostring(tPriceEMAclose[#tPriceEMAclose-2])..', '..'EMA pred pred: '..tostring(sEMA[#tPriceEMAclose-2]))
-	--]]
-	
-	local IdMA = window:GetValueByColName(row, 'MA60name').image
-	
-	--далее пошли запрашивать цены с графика moving averages
-	local tMA,n,s = getCandlesByIndex(IdMA,0,NumCandles-3, 2)		
-	strategy.Ma1Series=tMA	--этого поля (Ma1Series) нет в Init, оно создается здесь
-
-	--главное начинается здесь
-
-	strategy:CalcLevels() --получим значения цены и средней скользящей
-	
-	--message(IdPriceCombo)
-	
-	--пока отключено, проще с графика брать, а это надо еще тестировать
-	--EMA(60, IdPriceCombo)--рассчитываем среднюю скользящую (экспоненциальную)
+	window:SetValueByColName(row, 'MA60Pred', tostring(TableEMA[row][TableEMAlastCandle[row]-2]))
+	window:SetValueByColName(row, 'MA60',     tostring(TableEMA[row][TableEMAlastCandle[row]-1]))	
 
 	
-	
-	local acc = window:GetValueByColName(row, 'Account').image
-	--заглушка. для валют надо получить позицию из таблицы денежной позиции, потом надо доделать
-	local currency_CETS='USD'
-
-	--обновляем данные о позиции в визуальной таблице робота
-	window:SetValueByColName(row, 'Position', tostring(trader:GetCurrentPosition(sec, acc, class, currency_CETS)))
-	
-	--window:SetValueByColName(row, 'MA60Pred', tostring(EMA_TMP[#EMA_TMP-2]))
-	--window:SetValueByColName(row, 'MA60', tostring(EMA_TMP[#EMA_TMP-1]))
-
-	window:SetValueByColName(row, 'MA60Pred', tostring(strategy.Ma1Pred))
-	window:SetValueByColName(row, 'MA60', tostring(strategy.Ma1))
-	
-	window:SetValueByColName(row, 'PricePred', strategy.PriceSeries[0].close)
-	window:SetValueByColName(row, 'Price', strategy.PriceSeries[1].close)
-	
-	--
 
 	--если строка выключена то можно проверить это здесь, а можно чуть дальше, чтобы сигналы все же показывались
 	--[[
@@ -809,8 +774,6 @@ function main_loop(row)
 		if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
 			processSignal(row)
 		end		
-	
-		
 		
 	elseif current_state == 'waiting for a response' then
 		--заявку отправили, ждем пока придет ответ, перед отправкой новой
@@ -821,9 +784,9 @@ function main_loop(row)
 
 end
 
---[[ тренировка расчет средней по статье http://bot4sale.ru/blog-menu/qlua/spisok-statej/487-coffee.html
+--[[ тренировка. расчет средней по статье http://bot4sale.ru/blog-menu/qlua/spisok-statej/487-coffee.html
 
-статья говно
+из-за рекурсии вылетает в ошибку stack overflow
 
 ma =
 {
@@ -932,7 +895,7 @@ function processSignal(row)
 		window:SetValueByColName(row, 'qty', tostring(qty))
 		
 		--для визуального контроля пишем информацию о заявке во вспомогательную таблицу		
-		helperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, qty, window) 
+		helperGrid:addRowToOrders(row, trans_id, signal_id, signal_direction, qty, window, 0) 
 		
 		--сохраним "старую" позицию
 		window:SetValueByColName(row, 'savedPosition', tostring(factQuantity))
@@ -981,13 +944,18 @@ function processSignal(row)
 		--сначала удаляем несработавший стоп лосс (если он, конечно, есть)
 		kill_stop_loss(row)
 		--потом ставим новый
-		send_stop_loss(row)
+		if factQuantity<0 then
+			factQuantity=-1*factQuantity
+		end
+		send_stop_loss(row, factQuantity)
 		
 	end
 	
 end
 
-function send_stop_loss(row)
+--параметры
+--	factQuantity - вх - число - этого количества нет в главной таблице, поэтому приходится передавать его явно
+function send_stop_loss(row, factQuantity)
 
 	local seccode 	= window:GetValueByColName(row, 'Ticker').image
 	local class 	= window:GetValueByColName(row, 'Class').image
@@ -1018,16 +986,19 @@ function send_stop_loss(row)
 	else
 		price = stop_price + helper:round_to_step(stop_price* 0.005,security.minStepPrice) --по этой цене будем покупать
 	end		
-	local quantity 	= 1		
-	local trans_id 	= helper:getMiliSeconds_trans_id()
 	
-	helperGrid:addRowToStopOrders(row, trans_id, window) 
+	--если скорость компьютера будет высока, то есть риск, что сгенерируется одинаковый транс_ид для разных строк.
+	--надо найти способ генерировать заведомо уникальный. пока будем прибавлять номер строки
+	local trans_id 	= helper:getMiliSeconds_trans_id()+row
 	
-	transactions:StopLimitWithId(seccode, class, client, depo, operation, stop_price, price, quantity, trans_id)
+	signal_id = nil -- нужен ли он здесь???
+	helperGrid:addRowToOrders(row, trans_id, signal_id, sig_dir, factQuantity, window, 1)
+	
+	transactions:StopLimitWithId(seccode, class, client, depo, operation, stop_price, price, factQuantity, trans_id)
 		
 	window:SetValueByColName(row, 'stop_order_id', tostring(trans_id))
 	
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'stop loss '..tostring(trans_id)..' was sent')
+	logstoscreen:add2(window, row, nil,nil,nil,nil,'stop loss witn trans_id '..tostring(trans_id)..' was sent')
 	
 end
 
@@ -1040,15 +1011,15 @@ function kill_stop_loss(row)
 	end	
 	
 	--сначала нужно найти номер стоп-лосса в таблице stop_orders по id
-	local s = stop_orders:GetSize()
+	local s = orders:GetSize()
 	local rowNum=nil
 	local number = nil
 	for i = s, 1, -1 do
 		--здесь придется обойтись без строки в главной таблице - row, т.к. в контексте этой функции невозможно понять, по какой строке пришел колбэк
 		--но это не будет проблемой, т.к. trans_id вполне однозначно определяет по какому инструменту ждем ответ
-		if tostring(stop_orders:GetValue(i, 'trans_id').image) == tostring(stop_id) then
-			rowNum=tonumber(stop_orders:GetValue(i, 'row').image)
-			number=tonumber(stop_orders:GetValue(i, 'order').image)
+		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(stop_id) then
+			rowNum=tonumber(orders:GetValue(i, 'row').image)
+			number=tonumber(orders:GetValue(i, 'order').image)
 			break
 		end
 	end		
@@ -1058,7 +1029,7 @@ function kill_stop_loss(row)
 		local seccode 	= window:GetValueByColName(row, 'Ticker').image
 		local class 	= window:GetValueByColName(row, 'Class').image
 		
-		transactions:killStopOrder(stop_id, seccode, class, stop_id)
+		transactions:killStopOrder(number, seccode, class, stop_id)
 		
 		window:SetValueByColName(row, 'stop_order_id', ' ')--заметаем следы
 		
@@ -1147,7 +1118,8 @@ function wait_for_signal(row)
 	--если есть сигнал, нужно проверить, а может мы его уже обработали.-
 	--таймфрейм тут планируется 1 час, поэтому главный цикл будет видеть сигнал
 	--еще целый час после обработки
-	local dt=strategy.PriceSeries[1].datetime--предыдущая свеча
+	--local dt=strategy.PriceSeries[1].datetime--предыдущая свеча
+	local dt = TableDS[row]:T(TableEMAlastCandle[row]-1)
 	local candle_date = dt.year..'-'..dt.month..'-'..dt.day
 	local candle_time = dt.hour..':'..dt.min..':'..dt.sec
 
@@ -1187,7 +1159,8 @@ function wait_for_signal(row)
 	window:SetValueByColName(row, 'signal_id', tostring(signal_id))
 	
 	--код ниже в комменте заменен на этот вызов функции
-	helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, strategy.PriceSeries[1].close, strategy.Ma1, false) 
+	--helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, strategy.PriceSeries[1].close, strategy.Ma1, false) 
+	helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, TableDS[row]:C(TableEMAlastCandle[row]-1), TableEMA[row][TableEMAlastCandle[row]-1], false) 
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
 	if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
@@ -1224,8 +1197,8 @@ end
 --|			ОСНОВНОЙ АЛГОРИТМ - КОНЕЦ
 --+-----------------------------------------------
 
-
-function signal_buy(row)
+--для варианта с функцией getCandlesByIndex()
+function signal_buy_old(row)
 
 --  Ma1 = Ma1Series[1].close						--предыдущая свеча
 --  Ma1Pred = Ma1Series[0].close 	--ENS		--предпредыдущая свеча
@@ -1252,12 +1225,12 @@ function signal_buy(row)
 	--]]
 	
 	--[[
-	if EMA_TMP[#EMA_TMP-1]  ~= 0 		--предыдущая свеча
-	and EMA_TMP[#EMA_TMP-2]  ~= 0 		--предпредыдущая свеча
+	if EMA_Array[#EMA_Array-1]  ~= 0 		--предыдущая свеча
+	and EMA_Array[#EMA_Array-2]  ~= 0 		--предпредыдущая свеча
 	and strategy.PriceSeries[0].close ~= 0
 	and strategy.PriceSeries[1].close ~= 0
-	and strategy.PriceSeries[0].close < EMA_TMP[#EMA_TMP-2] --предпредыдущий бар ниже средней
-	and strategy.PriceSeries[1].close > EMA_TMP[#EMA_TMP-1] --предыдущий бар выше средней
+	and strategy.PriceSeries[0].close < EMA_Array[#EMA_Array-2] --предпредыдущий бар ниже средней
+	and strategy.PriceSeries[1].close > EMA_Array[#EMA_Array-1] --предыдущий бар выше средней
 	then
 		return true
 	else
@@ -1266,7 +1239,8 @@ function signal_buy(row)
 --]]	
 end
 
-function signal_sell(row)
+--для варианта с функцией getCandlesByIndex()
+function signal_sell_old(row)
 
 --  Ma1 = Ma1Series[1].close						--предыдущая свеча
 --  Ma1Pred = Ma1Series[0].close 	--ENS		--предпредыдущая свеча
@@ -1283,8 +1257,8 @@ function signal_sell(row)
 	and strategy.Ma1Pred  ~= 0 
 	and strategy.PriceSeries[0].close ~= 0
 	and strategy.PriceSeries[1].close ~= 0
---	and strategy.PriceSeries[0].close > EMA_TMP[#EMA_TMP-2] --предпредыдущий бар выше средней
---	and strategy.PriceSeries[1].close < EMA_TMP[#EMA_TMP-1] --предыдущий бар ниже средней
+--	and strategy.PriceSeries[0].close > EMA_Array[#EMA_Array-2] --предпредыдущий бар выше средней
+--	and strategy.PriceSeries[1].close < EMA_Array[#EMA_Array-1] --предыдущий бар ниже средней
 	and strategy.PriceSeries[0].close > strategy.Ma1Pred --предпредыдущий бар выше средней
 	and strategy.PriceSeries[1].close < strategy.Ma1 --предыдущий бар ниже средней
 	then
@@ -1295,6 +1269,55 @@ function signal_sell(row)
 
 end
 
+
+
+function signal_buy(row)
+
+	--для тестов
+    
+	if window:GetValueByColName(row, 'test_buy').image == 'true' then
+		window:SetValueByColName(row, 'test_buy', 'false')
+		return true
+	end
+		
+	---[[
+	if tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) ~= 0 
+	and tonumber(TableEMA[row][TableEMAlastCandle[row]-2])  ~= 0 
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) ~= 0
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) ~= 0
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) < tonumber(TableEMA[row][TableEMAlastCandle[row]-2]) --предпредыдущий бар ниже средней
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) > tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) --предыдущий бар выше средней
+	then
+		return true
+	else
+		return false
+	end
+	--]]	
+		
+end
+
+function signal_sell(row)
+
+	--для тестов
+	
+	if window:GetValueByColName(row, 'test_sell').image == 'true' then
+		window:SetValueByColName(row, 'test_sell', 'false')
+		return true
+	end
+	
+	if tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) ~= 0 
+	and tonumber(TableEMA[row][TableEMAlastCandle[row]-2])  ~= 0 
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) ~= 0
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) ~= 0
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) > tonumber(TableEMA[row][TableEMAlastCandle[row]-2]) --предпредыдущий бар выше средней
+	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) < tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) --предыдущий бар ниже средней
+	then
+		return true
+	else
+		return false
+	end
+
+end
 
 
 

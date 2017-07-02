@@ -25,13 +25,12 @@ function Settings:Init()
   
   --ниже идет геометрия экрана
   
-  self.main_position = {x=0,y=0,dx=800,dy=400} --позиция главного окна
-  self.log_position = {x=0,y=401,dx=800,dy=300} --позиция окна логов
+  self.main_position = {x=0,y=0,dx=1200,dy=150} --позиция главного окна
+  self.log_position = {x=0,y=151,dx=1200,dy=150} --позиция окна логов
   
-  self.signals_position = {x=810,y=10,dx=700,dy=200} --позиция окна сигналов
-  self.orders_position = {x=810,y=210,dx=700,dy=200} --позиция окна заявок
-  
-  self.stop_orders_position = {x=810,y=410, dx=700,dy=200} --позиция окна стоп-лоссов
+  self.signals_position = {x=0,y=302,dx=1200,dy=150} --позиция окна сигналов
+  self.orders_position = {x=0,y=453,dx=1200,dy=150} --позиция окна заявок
+
   
   self.db_path = getScriptPath() .. "\\ens_grid.db"
   self.robot_id = 'ENS_GRID_01'
@@ -126,9 +125,9 @@ function Settings:instruments_list()
 	row, secList = addOneInstrumentToTable(row, {'ALROSA',	'', 'ALRS', 10, 'revers', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'FSK',		'', 'FEES', 10, 'revers', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'RUSHYDRO','', 'HYDR', 10, 'revers', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
-	row, secList = addOneInstrumentToTable(row, {'MOEXSPOT','', 'MOEX', 10, 'revers', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
+	row, secList = addOneInstrumentToTable(row, {'MOEXSPOT','', 'MOEX', 10, 'long', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'SURGUT',	'', 'SNGS', 10, 'long', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
-	row, secList = addOneInstrumentToTable(row, {'YANDEX',	'', 'YNDX', 10, 'revers', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
+	row, secList = addOneInstrumentToTable(row, {'YANDEX',	'', 'YNDX', 10, 'long', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
 	--]]
 	row, secList = addOneInstrumentToTable(row, {'VTB',		'', 'VTBR', 10, 'long', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)
 	row, secList = addOneInstrumentToTable(row, {'MTS',		'', 'MTSS', 10, 'long', 'QJSIM', '10646', 'NL0011100043', 'start'}, secList)

@@ -1,4 +1,4 @@
---это класс для расчет экспоненциальной средней скользящей
+ --это класс для расчета экспоненциальной средней скользящей
 MovingAverage = class(function(acc)
 end)
 
@@ -7,7 +7,6 @@ local math_floor = math.floor
 
 function MovingAverage:Init()
 
-  self.EMA_TMP = nil --массив рассчитанных свечей
   self.lastCandleMA = nil --последняя посчитанная свеча 
   
 end
@@ -30,6 +29,9 @@ EMAi-1 - значение EMA предыдущего периода,
 n - период скользящей средней 
 Начальное значение равно параметру, по которому рассчитывается индикатор: EMA0=P0 – при расчете по цене 
 --]]
+
+	local EMA_Array = {}
+	
 	local tPrice = {}
 	local n = 0
 	local s = ''
@@ -58,23 +60,81 @@ n - период скользящей средней
 	
 end
 
---Exponential Moving Average (EMA)
---EMAi = (EMAi-1*(n-1)+2*Pi) / (n+1)
---ds - DataSource - таблица свечек
+
+--ds - DataSource - таблица свечек полученная функцией CreateDataSource()
+--Period - период средней (количество свечей)
+--lastCandle - последняя рассчитанная свеча (чтобы не считать все с нуля на каждом вызове)
+function MovingAverage:emaDS(EMA_Array, DataSource, Period, lastCandle)
+
+	local NumCandles = DataSource:Size()	
+
+--[[
+В справке к Квику есть формула: 
+EMAi = (EMAi-1 * (period-1) + 2*Pi) / (period+1), 
+где Pi - значение цены в текущем периоде, 
+EMAi - значение EMA текущего периода, 
+EMAi-1 - значение EMA предыдущего периода,
+period - период скользящей средней 
+Начальное значение равно параметру, по которому рассчитывается индикатор: EMA0=P0 – при расчете по цене 
+--]]
+
+	
+	
+	local idp = 11 --точность округлений (знаков после точки)
+	local start = 1
+	if lastCandle == nil or lastCandle == 0 or lastCandle == 1 then
+		start = 1
+	else
+		start = lastCandle
+	end
+	for i = start, DataSource:Size() do
+	
+		self:fEMAds(EMA_Array, i, Period, DataSource, idp)
+		
+	end
+	
+	lastCandle = DataSource:Size()
+	
+	return EMA_Array, lastCandle
+	
+end
+
+
+
+--ds - DataSource - getCandlesByIndex()
 --idp - точность округления
-function MovingAverage:fEMA(Index, Period, ds, idp) 
+function MovingAverage:fEMA(EMA_Array, Index, Period, ds, idp) 
 	
 	local Out = 0
 	if Index == 0 then
-		self.EMA_TMP[Index]=self:round(ds[Index].close,idp)
+		EMA_Array[Index]=self:round(ds[Index].close,idp)
 	else
-		local prev_ema = self.EMA_TMP[(Index-1)]
-		local candle = ds[Index]
-		self.EMA_TMP[Index]=self:round((prev_ema*(Period-1)+2*candle.close) / (Period+1),idp)
+		local prev_ema = EMA_Array[(Index-1)]
+		EMA_Array[Index]=self:round((prev_ema*(Period-1)+2*ds[Index].close) / (Period+1),idp)
 	end
 
-	if Index >= Period-1 then -- минус 1 - потому что идем от нуля
-		Out = self.EMA_TMP[Index]
+	if Index >= Period then
+		Out = EMA_Array[Index]
+	end
+
+	return self:round(Out,idp)
+	
+end
+
+--ds - DataSource - таблица свечек полученная функцией CreateDataSource()
+--idp - точность округления
+function MovingAverage:fEMAds(EMA_Array, Index, Period, ds, idp) 
+	
+	local Out = 0
+	if Index == 0 or Index == 1 then
+		EMA_Array[1]=self:round(ds:C(1),idp)
+	else
+		local prev_ema = EMA_Array[(Index-1)]
+		EMA_Array[Index]=self:round((prev_ema*(Period-1)+2*ds:C(Index)) / (Period+1),idp)
+	end
+
+	if Index >= Period then
+		Out = EMA_Array[Index]
 	end
 
 	return self:round(Out,idp)
@@ -92,7 +152,7 @@ if idp and num then
 else return num end
 end
 
---[[
+--[[ это из статьи про расчет средней методом кофеварки
 MovingAverage.ma =
 {
     -- Exponential Moving Average (EMA)
@@ -120,9 +180,7 @@ MovingAverage.ma =
 --]]
 
 
---[[
-
-function main()
+--[[function main()
 	--Попробуем, как оно работает. В качестве источника данных берем массив значений, период усреднения пусть будет равен 3.
 	local data={1,3,5,7,9,2,4,6,8,0}
 	local s = ma.ema(3, function(i) return data[i] end)
