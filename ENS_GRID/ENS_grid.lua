@@ -287,17 +287,6 @@ function stopScript()
 end
 
 --рефакторинг. запуск в работу одного инструмента
---[[
-function StartRow(r, c)
-
-	Red(window.hID, r, c)
-	SetCell(window.hID, r, c, 'stop')
-	window:SetValueByColName(r, 'current_state', 'waiting for a signal')
-	
-end
---]]
-
---рефакторинг. запуск в работу одного инструмента
 function startStopRow(row)
 
 	if window:GetValueByColName(row, 'StartStop').image == 'start' then
@@ -352,7 +341,7 @@ function OnTransReply(trans_reply)
 		if rowNum~=nil then
 			window:SetValueByColName(rowNum, 'StartStop', 'stop')--turn off
 			startStopRow(rowNum)
-			logstoscreen:add2(window, rowNum, nil,nil,nil,nil,  'instrument was turned off because of the error code '..tostring(trans_reply.status))
+			logstoscreen:add2(window, rowNum, nil,nil,nil,nil,  'instrument was turned off due to error with code '..tostring(trans_reply.status))
 		end
 		
 		--пишем признак ошибки в таблицу Orders
@@ -387,7 +376,7 @@ function OnTrade(trade)
 		if tostring(orders:GetValue(i, 'trans_id').image) == tostring(trade.trans_id) 
 			and tostring(orders:GetValue(i, 'order').image) == tostring(trade.order_num) then
 
-        logstoscreen:add2(window, tonumber(orders:GetValue(i, 'row').image), nil,nil,nil,nil,'OnTrade() '..helper:getMiliSeconds() ..', trans_id = '..tostring(trade.trans_id) .. ', number = ' ..tostring(trade.trade_num).. ', order number = ' ..tostring(trade.order_num))
+			logstoscreen:add2(window, tonumber(orders:GetValue(i, 'row').image), nil,nil,nil,nil,'OnTrade() '..helper:getMiliSeconds() ..', trans_id = '..tostring(trade.trans_id) .. ', number = ' ..tostring(trade.trade_num).. ', order number = ' ..tostring(trade.order_num))
 
 
 			orders:SetValue(i, 'trade', trade.trade_num)
@@ -397,7 +386,24 @@ function OnTrade(trade)
 			else
 				qty_fact = tonumber(qty_fact)
 			end
-			orders:SetValue(i, 'qty_fact', qty_fact + tonumber(trade.qty))
+			local newFactQty = qty_fact + tonumber(trade.qty)
+			
+			local amount = orders:GetValue(i, 'amount').image
+			if amount == nil or amount == '' then
+				amount = 0
+			else
+				amount = tonumber(amount)
+			end
+			
+			--сумма будет неправильная, т.к. количество в сделке - в лотах, но это нам не важно, главное - цена, а она будет правильной!
+			local newAmount = amount + tonumber(trade.price*trade.qty)
+			orders:SetValue(i, 'qty_fact', newFactQty)
+			orders:SetValue(i, 'amount', newAmount)
+			if newFactQty~=0 then
+				orders:SetValue(i, 'avg_price', newAmount/newFactQty)
+			else
+				orders:SetValue(i, 'avg_price', 0)
+			end
 			--logstoscreen:add2(window, row, nil,nil,nil,nil,'OnTrade - trans_id '..tostring(orders:GetValue(i, 'trans_id').image))
 			break
 		end
@@ -565,51 +571,27 @@ end
 --главная функция робота, которая гоняется в цикле
 function main()
 
-
-
-
-
 	if settings.invert_deals == true then
 		message('включено инвертирование сделок!!!',3)
 		logstoscreen:add2(window, nil, nil,nil,nil,nil,'включено инвертирование сделок!!!')
 	end
-	
-	
-	
-	
-	
+---------------------------------------------------------------------------	
 	--создаем вспомогательные таблицы
 ---------------------------------------------------------------------------	
 	--signals
 	if helperGrid:createTableSignals() == false then
 		return
 	end
-
 	signals = helperGrid.signals
-	
 ---------------------------------------------------------------------------	
 	--orders
 	if helperGrid:createTableOrders() == false then
 		return
 	end	
-	
 	orders = helperGrid.orders
-	
 ---------------------------------------------------------------------------		
-	
-	
-	
-	
-	
 	--создаем окно робота с таблицей и добавляем в эту таблицу строки
 	window = Window()									--функция Window() расположена в файле Window.luac и создает класс
-	
-	--{'A','B'} - это массив с именами колонок
-	--справка: http://smart-lab.ru/blog/291666.php
-	--Чтобы создать массив, достаточно перечислить в фигурных скобках значения его элементов:
-	--t = {«красный», «зеленый», «синий»}
-	--Это выражение эквивалентно следующему коду:
-	--t = {[1]=«красный», [2]=«зеленый», [3]=«синий»}	
 	
 	--ENS класс window содержит поле columns, чтобы потом можно было найти  номер колонки по имени
 	--колонки 'MA60name','PriceName' содержат идентификаторы графиков. для каждой бумаги - свой идентификатор
@@ -627,17 +609,13 @@ function main()
 	--signal_id - идентификатор сигнала
 	--savedPosition - число - сюда сохраняем позицию перед отправкой транзакции, а потом в функции ожидания ответа проверяем, поменялось ли это количество
 	--stop_order_id - пользовательский ИД для стоп-лосса
-	local t = {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition', 'stop_order_id'}
+	--start_price - цена по которой вошли в сделку. следим за прибылью и потихоньку уменьшаем позицию, если прибыль растет
+	local t = {'current_state','Account','Depo','Name','Ticker','Class', 'Lot', 'Position','sig_dir','LastPrice','BuyMarket','SellMarket','StartStop','MA60Pred','MA60','PricePred','Price','PriceName','MA60name','minStepPrice','rejim','trans_id','signal_id','test_buy','test_sell','qty','savedPosition', 'stop_order_id', 'start_price'}
 	window:Init(settings.TableCaption, t, settings.main_position)
-	
-
-	
-	--НАСТРОЙКИ ПОКА ЗАДАЮТСЯ ЗДЕСЬ!!!!
 	
 	--добавляем строки с инструментами в главную таблицу
 	addRowsToMainWindow()
 
-	
 	--обработчик событий главной таблицы
 	SetTableNotificationCallback (window.hID, f_cb)
 
@@ -650,15 +628,21 @@ function main()
 			helperGrid:Green(window.hID, row, window:GetColNumberByName('StartStop'))
 		end
 		
-		
 		--для самостоятельного расчета средней будем использовать datasource
 		local class_code =  window:GetValueByColName(row, 'Class').image
 		local sec_code =  window:GetValueByColName(row, 'Ticker').image
 		
+		--datasource создаем в глобальной таблице
 		TableDS[row], ErrorDS[row] = CreateDataSource (class_code, sec_code, INTERVAL_M1) --индексы начинаются с единицы
 
 		if TableDS[row] == nil then
 			logstoscreen:add2(window, row, nil,nil,nil,nil,'error when setting creating DataSource: '..ErrorDS[row])
+			--выключаем инструмент, по которому пришла ошибка
+
+			window:SetValueByColName(row, 'StartStop', 'stop')--turn off
+			startStopRow(row)
+			logstoscreen:add2(window, row, nil,nil,nil,nil,  'instrument was turned off due to error creating datasource')
+			
 		else
 		
 			--установим колбэк на обновление свечек. пока пустой
@@ -685,9 +669,9 @@ function main()
 		
 		--сразу посчитаем среднюю
 		
-		TableEMAlastCandle[row] = 0
+		TableEMAlastCandle[row] = 0 --таблица, в которой лежат номера последних рассчитанных свечей индикатора EMA. хотя наверное можно отказаться, брать по размеру таблицы
 		
-		TableEMA[row]={}
+		TableEMA[row]={} --таблица индикатор EMA. 
 		
 		TableEMA[row], TableEMAlastCandle[row] = EMAclass:emaDS(TableEMA[row], TableDS[row], 60, TableEMAlastCandle[row])
 		
@@ -696,14 +680,14 @@ function main()
 	end
 	
 	
-	--задержка 100 миллисекунд между итерациями 
+	--главный цикл
 	while is_run do
 	
 		for row=1, GetTableSize(window.hID) do
 			main_loop(row)
 		end
 		
-		sleep(50)
+		sleep(500)
 	end
 
 end
@@ -734,12 +718,15 @@ function main_loop(row)
 	end
 	--]]
   
-	  --[[ проверка попадания в торговое окно
-	  local serv_time=tonumber(HelperGrid:timeformat(getInfoParam("SERVERTIME"))) -- помещение в переменную времени сервера в формате HHMMSS
-	  if not (serv_time>=10000 and serv_time<235000) then
+	---[[ проверка попадания в торговое окно
+	local serv_time=tonumber(helperGrid:timeformat(getInfoParam("SERVERTIME"))) -- помещение в переменную времени сервера в формате HHMMSS
+	--logstoscreen:add2(window, row, nil,nil,nil,nil,'server time '..tostring(serv_time))
+	--первые 5 минут не торгуем
+	if not (serv_time>=100500 and serv_time<235000) then
 		return false
-	  end 	
-		--]]
+	end 	
+	--]]
+
 		
 
 	--рассчитать среднюю самостоятельно
@@ -937,10 +924,30 @@ function processSignal(row)
 		window:SetValueByColName(row, 'trans_id', nil)
 		window:SetValueByColName(row, 'signal_id', nil)
 		
+		
+		--запоминаем среднюю цену входа в главной таблице
+		--найдем последнюю строку с этим инструментом в таблице orders
+		for i = orders:GetSize(),1,-1 do
+			if tostring(signal_id) == tostring(orders:GetValue(i, "signal_id").image) 
+				and tostring(orders:GetValue(i, 'row').image) == tostring(row) then
+				
+				logstoscreen:add2(window, tonumber(orders:GetValue(i, 'row').image), nil,nil,nil,nil,'found avg_price')
+
+				local avg_price = tonumber(orders:GetValue(i, "avg_price").image)
+				
+				window:SetValueByColName(row, 'start_price', avg_price)
+				
+				break
+			end
+		end		
+		
+		
+		
 		--+------------------------------
 		--|		ставим стоп лосс
 		--+------------------------------
 		
+		--[[
 		--сначала удаляем несработавший стоп лосс (если он, конечно, есть)
 		kill_stop_loss(row)
 		--потом ставим новый
@@ -948,7 +955,7 @@ function processSignal(row)
 			factQuantity=-1*factQuantity
 		end
 		send_stop_loss(row, factQuantity)
-		
+		--]]
 	end
 	
 end
@@ -1102,8 +1109,73 @@ function wait_for_response(row)
 		
 end
 
---ждать новые сигналы
+function test_profit(row)
+
+
+	local SecCodeBox	= window:GetValueByColName(row, 'Ticker').image
+	local ClassCode 	= window:GetValueByColName(row, 'Class').image
+	local dir			= window:GetValueByColName(row, 'sig_dir').image
+	local ClientBox 	= window:GetValueByColName(row, 'Account').image
+	local DepoBox 		= window:GetValueByColName(row, 'Depo').image
+	
+	security.class = ClassCode
+	security.code = SecCodeBox
+	
+	
+	
+	if window:GetValueByColName(row, 'start_price').image~=nil and window:GetValueByColName(row, 'start_price').image~='' then
+	
+		local start_price = tonumber(window:GetValueByColName(row, 'start_price').image)
+		
+		security:Update()
+		
+		if dir == 'buy' then
+			
+			local profit = security.bid - start_price
+			if profit > 0 then
+			
+				if profit/start_price >= 0.001 then
+					--если есть 0,1% прибыли - закрываем 2 лота
+					local trans_id 	= helper:getMiliSeconds_trans_id()+(row*2)
+					local price = security.bid - (security.minStepPrice * 3)
+					transactions:orderWithId(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(price), 2, trans_id)
+					logstoscreen:add2(window, row, nil,nil,nil,nil,'закрыли 2 лота из позции. отправлена транзакция ИД '..tostring(trans_id)..' с направлением SELL по цене '..tostring(price) .. ', цена инструмента была '..tostring(security.last))
+					
+				end
+			end
+
+		elseif dir == 'sell' then
+			
+			local profit = start_price - security.offer
+			if profit > 0 then
+			
+				if profit/start_price >= 0.001 then
+					--если есть 0,1% прибыли - закрываем 2 лота
+					local trans_id 	= helper:getMiliSeconds_trans_id()+(row*3)
+					local price = security.offer + (security.minStepPrice * 3)
+					transactions:orderWithId(SecCodeBox, ClassCode, "B", ClientBox, DepoBox, tostring(price), 2, trans_id)
+					logstoscreen:add2(window, row, nil,nil,nil,nil,'закрыли 2 лота из позции. отправлена транзакция ИД '..tostring(trans_id)..' с направлением BUY по цене '..tostring(price) .. ', цена инструмента была '..tostring(security.last))
+					
+				end
+			
+			end
+
+		end
+	end
+end
+
+--ждать новые сигналы и следить за ценой.
 function wait_for_signal(row)
+
+
+	--сначала посчитаем прибыль.
+	--если она есть, то частично закрываем позицию
+	
+	test_profit(row)
+	
+
+	
+	--потом проверим сигнал
 
 	--нужно только так, сначала поместить сигналы в переменные, потом работать с переменными
 	--это надо, чтобы работал тест сигналов - когда включается тестовый флаг, функция сигнала возвращает истину, а перед этим выключает флаг
@@ -1158,8 +1230,6 @@ function wait_for_signal(row)
 	local signal_id = helper:getMiliSeconds_trans_id()
 	window:SetValueByColName(row, 'signal_id', tostring(signal_id))
 	
-	--код ниже в комменте заменен на этот вызов функции
-	--helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, strategy.PriceSeries[1].close, strategy.Ma1, false) 
 	helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, TableDS[row]:C(TableEMAlastCandle[row]-1), TableEMA[row][TableEMAlastCandle[row]-1], false) 
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации

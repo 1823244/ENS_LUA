@@ -23,10 +23,15 @@ function Security:Init(class, code)
   self.pricemax = 0
   self.pricemin = 0
   
+  self.bid = 0
+  self.offer = 0
+  
 end
 
 function Security:Update()
 	self.last = getParamEx(self.class, self.code, "LAST").param_value + 0
+	self.bid = getParamEx(self.class, self.code, "bid").param_value + 0
+	self.offer = getParamEx(self.class, self.code, "offer").param_value + 0
 	self.minStepPrice = getParamEx(self.class, self.code, "SEC_PRICE_STEP").param_value + 0
 end
 

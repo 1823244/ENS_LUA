@@ -100,6 +100,8 @@ function HelperGrid:createTableOrders()
 	orders:AddColumn("trade",			QTABLE_INT_TYPE, 10)
 	orders:AddColumn("qty",				QTABLE_INT_TYPE, 10) --количество из заявки
 	orders:AddColumn("qty_fact",		QTABLE_INT_TYPE, 10) --количество из сделок
+	orders:AddColumn("amount",			QTABLE_DOUBLE_TYPE, 10) --сумма по всем сделкам
+	orders:AddColumn("avg_price",		QTABLE_DOUBLE_TYPE, 10) --средняя цена по всем сделкам
 	orders:AddColumn("robot_id",		QTABLE_STRING_TYPE, 10)
 	orders:AddColumn("is_stop_order",	QTABLE_INT_TYPE, 10)--1 yes, 0 no
 	orders:AddColumn("trans_reply",		QTABLE_STRING_TYPE, 10)--если была ошибка , то в OnTransReply запишем сюда FAIL
