@@ -1,30 +1,30 @@
---все инструменты должны торговаться в пределах одного торгового счета
---если есть необходимость запустить робота на двух счетах, то нужно запускать двух роботов
---имеется в виду, если есть ИИС и обычный
---хотя вообще это не строгое условие
+--[[Справка.
+	все инструменты должны торговаться в пределах одного торгового счета
+	если есть необходимость запустить робота на двух счетах, то нужно запускать двух роботов
+	имеется в виду, если есть ИИС и обычный
+	хотя вообще это не строгое условие
 
---инструкция по настройке
---создать функцию, которая возвращает массив инструментов, образец - secListFutures()
---добавить инструменты в таблицу в функции main, см. по образцу
---создать графики цены всех новых инструментов. идентификатор графика формируется на основании тикера, см. образец
---готово.
+	инструкция по настройке
+	создать функцию, которая возвращает массив инструментов, образец - secListFutures()
+	добавить инструменты в таблицу в функции main, см. по образцу
+	создать графики цены всех новых инструментов. идентификатор графика формируется на основании тикера, см. образец готово.
+--]]
 
---cheat sheet
---установка значения в ячейке таблицы
---setVal(row, 'LastPrice', tostring(security.last))
---получение значения из ячейки
--- local acc = getVal(row, 'Account')
---запись в лог
---logstoscreen:add2(window, row, nil,nil,nil,nil,'message to log')
+--[[cheat sheet.
+	установка значения в ячейке таблицы
+		setVal(row, 'LastPrice', tostring(security.last))
+	получение значения из ячейки
+		local acc = getVal(row, 'Account')
+	запись в лог:
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'message to log')
+--]]
 
 local sqlite3 = require("lsqlite3")
 
-
-local bit = require"bit"
 local math_ceil = math.ceil
 local math_floor = math.floor
 
---common classes
+common classes
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Window.lua")
@@ -46,8 +46,8 @@ dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\EMA.lua")
 
 dofile (getScriptPath() .. "\\quik_table_wrapper.lua")
 
---Это таблицы:
-trader ={}
+--Это классы, которые на самом деле являются таблицами
+trader={}
 trans={}
 helper={}
 helperGrid={}
@@ -57,14 +57,12 @@ security={}
 window={}
 logstoscreen={}
 EMAclass = {}
-
 logs={}
 
 local is_run = true	--флаг работы скрипта, пока истина - скрипт работает
 
 local signals = {} --таблица обработанных сигналов.	
 local orders = {} --таблица заявок
-
 
 --эти таблицы нужны для того, чтобы не обрабатывать повторные колбэки на одни и те же сделки/заявки
 local processed_trades = {} --таблица обработанных сделок
@@ -76,9 +74,8 @@ local db = nil --подключение к базе SQLite
 local EMA_Array = {}--массив рассчитанных свечений индикатора средняя скользящая для одного инструмента
 local TableEMA = {} --таблица с массивам средних скользящих для всех инструментов
 local TableEMAlastCandle = {} -- таблица с последней рассчитанной свечой по ЕМА. чтобы каждый раз с начала не считать
-
 local TableDS= {} --датасурсы для всех инструментов
-local ErrorDS= {}
+local ErrorDS= {} --ошибки при создании датасурсов
 
 function OnInit(path)
 	trader = Trader()
@@ -124,18 +121,18 @@ function OnInit(path)
 	EMAclass:Init()
 end
 
---это не обработчик события, а просто функция покупки/продажи
---Parameters:
---	row - int - number of row in main table
---	direction - string - deal direction. for case when function uses outside of main algorithm. values: 'buy', 'sell'
+--[[это не обработчик события, а просто функция покупки/продажи
+	Parameters:
+		row - int - number of row in main table
+		direction - string - deal direction. for case when function uses outside of main algorithm. values: 'buy', 'sell' --]]
 function buySell(row, direction)
 
 	local SecCodeBox	= getVal(row, 'Ticker')
-	local ClassCode 	= window:GetValueByColName(row, 'Class').image
-	local ClientBox 	= window:GetValueByColName(row, 'Account').image
-	local DepoBox 		= window:GetValueByColName(row, 'Depo').image
+	local ClassCode 	= getVal(row, 'Class').image
+	local ClientBox 	= getVal(row, 'Account').image
+	local DepoBox 		= getVal(row, 'Depo').image
 	--идентификатор транзакции нужен обязательно, чтобы потом можно было понять, на какую транзакцию пришел ответ
-	local trans_id 		= tonumber(window:GetValueByColName(row, 'trans_id').image)
+	local trans_id 		= tonumber(getVal(row, 'trans_id').image)
 	
 	--если передано направление - используем его
 	local dir = ''
@@ -146,14 +143,14 @@ function buySell(row, direction)
 	end
 
 	--количество для заявки берем из "переменной" - поля qty в главной таблице в строке из параметра row
-	local qty 			= tonumber(window:GetValueByColName(row, 'qty').image)
+	local qty 			= tonumber(getVal(row, 'qty').image)
 	
 	--получаем цену последней сделки, чтобы обладать актуальной информацией
 	security.class = ClassCode
 	security.code = SecCodeBox
 	security:Update()
 	
-	--local minStepPrice = tonumber(window:GetValueByColName(row, 'minStepPrice').image)
+	--local minStepPrice = tonumber(getVal(row, 'minStepPrice').image)
 
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена Last '..tostring(security.last))
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() minStepPrice '..tostring(security.minStepPrice))
@@ -237,16 +234,14 @@ function OnConnected(flag)
  
 end
 
-
-
---колбэк
+--this is callback
 function OnStop(s)
 
 	stopScript()
 	
 end 
 
---закрывает окна и выключает флаг работы скрипта
+--shutting windows and turning off working flag
 function stopScript()
 
 	is_run = false
@@ -262,7 +257,7 @@ end
 --рефакторинг. запуск в работу одного инструмента
 function startStopRow(row)
 
-	if window:GetValueByColName(row, 'StartStop').image == 'start' then
+	if getVal(row, 'StartStop').image == 'start' then
 		helperGrid:Red(window.hID, row, window:GetColNumberByName('StartStop'))
 
 		setVal(row, 'StartStop', 'stop')
@@ -278,7 +273,7 @@ function startStopRow(row)
 end
 
 
---событие, возникающее после отправки заявки на сервер
+--callback
 function OnTransReply(trans_reply)
 
 	--помещаем номер заявки в таблицу Orders, в строку с текущим trans_id
@@ -323,7 +318,7 @@ function OnTransReply(trans_reply)
 	
 end 
 
-
+--callback
 function OnTrade(trade)
 
 	--если сделка уже есть в таблице обработанных, то еще раз не надо ее обрабатывать
@@ -384,6 +379,7 @@ function OnTrade(trade)
 	
 end
 
+--callback
 function OnOrder(order)
 	
 	--тут есть нюанс. приходят несколько колбэков, и в первом еще нет trans_id! поэтому первый колбэк не обрабатываем
@@ -424,8 +420,7 @@ end
 	параметры:
 	t_id - хэндл таблицы, полученный функцией AllocTable()
 	msg - тип события, происшедшего в таблице
-	par1 и par2 – значения параметров определяются типом сообщения msg, 
---]]
+	par1 и par2 – значения параметров определяются типом сообщения msg --]]
 local f_cb = function( t_id,  msg,  par1, par2)
 	
 	--QLUA GetCell
@@ -603,8 +598,8 @@ function main()
 		end
 		
 		--для самостоятельного расчета средней будем использовать datasource
-		local class_code =  window:GetValueByColName(row, 'Class').image
-		local sec_code =  window:GetValueByColName(row, 'Ticker').image
+		local class_code =  getVal(row, 'Class').image
+		local sec_code =  getVal(row, 'Ticker').image
 		
 		--datasource создаем в глобальной таблице
 		TableDS[row], ErrorDS[row] = CreateDataSource (class_code, sec_code, INTERVAL_M1) --индексы начинаются с единицы
@@ -717,14 +712,14 @@ function main_loop(row)
 
 	--если строка выключена то можно проверить это здесь, а можно чуть дальше, чтобы сигналы все же показывались
 	--[[
-	if window:GetValueByColName(row, 'StartStop').image =='start'  then --инструмент выключен. когда включен, там будет Stop
+	if getVal(row, 'StartStop').image =='start'  then --инструмент выключен. когда включен, там будет Stop
 		return
 	end		
 	--]]	
-	-------------------------------------------------------------------
-	--			ОСНОВНОЙ АЛГОРИТМ
-	-------------------------------------------------------------------
-	local current_state = window:GetValueByColName(row, 'current_state').image
+	--+-----------------------------------------------------------------
+	--|			ОСНОВНОЙ АЛГОРИТМ
+	--+-----------------------------------------------------------------
+	local current_state = getVal(row, 'current_state').image
 	
 	if current_state == 'waiting for a signal' then
 		--ожидаем новые сигналы 
@@ -732,49 +727,18 @@ function main_loop(row)
 		
 	elseif current_state == 'processing signal' then
 		--в этом состоянии робот шлет заявки на сервер, пока не наберет позицию или не кончится время или количество попыток
-		if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
+		if getVal(row, 'StartStop').image =='stop'  then--строка запущена в работу
 			processSignal(row)
 		end		
 		
 	elseif current_state == 'waiting for a response' then
 		--заявку отправили, ждем пока придет ответ, перед отправкой новой
-		if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
+		if getVal(row, 'StartStop').image =='stop'  then--строка запущена в работу
 			wait_for_response(row)
 		end
 	end
 
 end
-
---[[ тренировка. расчет средней по статье http://bot4sale.ru/blog-menu/qlua/spisok-statej/487-coffee.html
-
-из-за рекурсии вылетает в ошибку stack overflow
-
-ma =
-{
-    -- Exponential Moving Average (EMA)
-    -- EMA[i] = (EMA[i]-1*(per-1)+2*X[i]) / (per+1)
-    -- Параметры:
-    -- period - Период скользящей средней
-    -- get - функция с одним параметром (номер в выборке), возвращающая значение выборки
-    -- Возвращает массив, при обращению к которому будет рассчитываться только необходимый элемент
-    -- При повторном обращении будет возвращено уже рассчитанное значение
-	-- РЕКУРСИЯ!!!
-    ema =
-        function(period,get) 
-            return setmetatable( 
-                        {},
-                        { __index = function(tbl,indx)
-                                              if indx == 1 then
-                                                  tbl[indx] = get(1)
-                                              else
-                                                  tbl[indx] = (tbl[indx-1] * (period-1) + 2 * get(indx)) / (period + 1)
-                                              end
-                                              return tbl[indx]
-                                            end
-                        })
-       end
-}
---]]
 
 --обработать сигнал: сравнить текущую позицию с плановой, добрать количество до планового, если текущее меньше.
 function processSignal(row)
@@ -797,7 +761,7 @@ function processSignal(row)
 	local factQuantity = trader:GetCurrentPosition(getVal(row, 'Ticker'), 
 													getVal(row, 'Account'),
 													getVal(row, 'Class'))
-	
+		
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'fact quantity: ' .. tostring(factQuantity))
 	
 	local rejim = getVal(row, 'rejim')
@@ -939,11 +903,11 @@ end
 --	factQuantity - вх - число - этого количества нет в главной таблице, поэтому приходится передавать его явно
 function send_stop_loss(row, factQuantity)
 
-	local seccode 	= window:GetValueByColName(row, 'Ticker').image
-	local class 	= window:GetValueByColName(row, 'Class').image
-	local client 	= window:GetValueByColName(row, 'Account').image
-	local depo 		= window:GetValueByColName(row, 'Depo').image
-	local sig_dir 	= window:GetValueByColName(row, 'sig_dir').image
+	local seccode 	= getVal(row, 'Ticker').image
+	local class 	= getVal(row, 'Class').image
+	local client 	= getVal(row, 'Account').image
+	local depo 		= getVal(row, 'Depo').image
+	local sig_dir 	= getVal(row, 'sig_dir').image
 	
 	local operation = 'B'
 	if sig_dir == 'buy' then
@@ -1095,20 +1059,20 @@ end
 function test_profit(row)
 
 
-	local SecCodeBox	= window:GetValueByColName(row, 'Ticker').image
-	local ClassCode 	= window:GetValueByColName(row, 'Class').image
-	local dir			= window:GetValueByColName(row, 'sig_dir').image
-	local ClientBox 	= window:GetValueByColName(row, 'Account').image
-	local DepoBox 		= window:GetValueByColName(row, 'Depo').image
+	local SecCodeBox	=getVal(row, 'Ticker').image
+	local ClassCode 	=getVal(row, 'Class').image
+	local dir			=getVal(row, 'sig_dir').image
+	local ClientBox 	=getVal(row, 'Account').image
+	local DepoBox 		=getVal(row, 'Depo').image
 	
 	security.class = ClassCode
 	security.code = SecCodeBox
 	
 	
 	
-	if window:GetValueByColName(row, 'start_price').image~=nil and window:GetValueByColName(row, 'start_price').image~='' then
+	if getVal(row, 'start_price').image~=nil and getVal(row, 'start_price').image~='' then
 	
-		local start_price = tonumber(window:GetValueByColName(row, 'start_price').image)
+		local start_price = tonumber(getVal(row, 'start_price').image)
 		
 		security:Update()
 		
@@ -1150,13 +1114,10 @@ end
 --ждать новые сигналы и следить за ценой.
 function wait_for_signal(row)
 
-
 	--сначала посчитаем прибыль.
 	--если она есть, то частично закрываем позицию
 	
-	test_profit(row)
-	
-
+	--test_profit(row)
 	
 	--потом проверим сигнал
 
@@ -1170,10 +1131,11 @@ function wait_for_signal(row)
 		return
 	end
 		
-	--если есть сигнал, нужно проверить, а может мы его уже обработали.-
-	--таймфрейм тут планируется 1 час, поэтому главный цикл будет видеть сигнал
-	--еще целый час после обработки
-	--local dt=strategy.PriceSeries[1].datetime--предыдущая свеча
+	--[[если есть сигнал, нужно проверить, а может мы его уже обработали.-
+		таймфрейм тут планируется 1 час, поэтому главный цикл будет видеть сигнал
+		еще целый час после обработки
+		local dt=strategy.PriceSeries[1].datetime--предыдущая свеча
+	--]]
 	local dt = TableDS[row]:T(TableEMAlastCandle[row]-1)
 	local candle_date = dt.year..'-'..dt.month..'-'..dt.day
 	local candle_time = dt.hour..':'..dt.min..':'..dt.sec
@@ -1216,27 +1178,27 @@ function wait_for_signal(row)
 	helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, TableDS[row]:C(TableEMAlastCandle[row]-1), TableEMA[row][TableEMAlastCandle[row]-1], false) 
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
-	if window:GetValueByColName(row, 'StartStop').image =='stop'  then--строка запущена в работу
+	if getVal(row, 'StartStop').image =='stop'  then--строка запущена в работу
 		setVal(row, 'current_state', 'processing signal')
 	end
 	
 end
 
---[[	ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
-сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
-т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю эту свечу.
-Есть один баг. Если робота перезапустить во время жизни свечи, на которой возник сигнал, то он опять увидит этот сигнал
-и попробует вставить в позицию. Если позиция уже была сформирована до перезапуска, то ничего страшного, 
-сработает проверка plan-fact и не позволит увеличить позу.
---]]
+--[[ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
+	сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
+	т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю эту свечу.
+	Есть один баг. Если робота перезапустить во время жизни свечи, на которой возник сигнал, то он опять увидит этот сигнал
+	и попробует вставить в позицию. Если позиция уже была сформирована до перезапуска, то ничего страшного, 
+	сработает проверка plan-fact и не позволит увеличить позу.--]]
 function find_signal(row, candle_date, candle_time)
 	local rows=0
 	local cols=0
 	rows,cols = signals:GetSize()
-	for i = 1 , rows do --в таких таблицах нумерация начинается с единицы
+	for i = rows,1,-1 do --в таких таблицах нумерация начинается с единицы
 		if tonumber(signals:GetValue(i, "row").image) == row and
 			signals:GetValue(i, "date").image == candle_date and
-			signals:GetValue(i, "time").image == candle_time then
+			signals:GetValue(i, "time").image == candle_time 
+		then
 			--уже есть сигнал, повторно обрабатывать не надо
 			--logstoscreen:add2(window, row, nil,nil,nil,nil,'the signal is already processed: '..tostring(signals:GetValue(i, "id").image))
 			return true
@@ -1250,120 +1212,42 @@ end
 --|			ОСНОВНОЙ АЛГОРИТМ - КОНЕЦ
 --+-----------------------------------------------
 
---для варианта с функцией getCandlesByIndex()
-function signal_buy_old(row)
-
---  Ma1 = Ma1Series[1].close						--предыдущая свеча
---  Ma1Pred = Ma1Series[0].close 	--ENS		--предпредыдущая свеча
-
-	--для тестов
-    
-	if window:GetValueByColName(row, 'test_buy').image == 'true' then
-		setVal(row, 'test_buy', 'false')
-		return true
-	end
-		
-	---[[
-	if strategy.Ma1 ~= 0 
-	and strategy.Ma1Pred  ~= 0 
-	and strategy.PriceSeries[0].close ~= 0
-	and strategy.PriceSeries[1].close ~= 0
-	and strategy.PriceSeries[0].close < strategy.Ma1Pred --предпредыдущий бар ниже средней
-	and strategy.PriceSeries[1].close > strategy.Ma1 --предыдущий бар выше средней
-	then
-		return true
-	else
-		return false
-	end
-	--]]
-	
-	--[[
-	if EMA_Array[#EMA_Array-1]  ~= 0 		--предыдущая свеча
-	and EMA_Array[#EMA_Array-2]  ~= 0 		--предпредыдущая свеча
-	and strategy.PriceSeries[0].close ~= 0
-	and strategy.PriceSeries[1].close ~= 0
-	and strategy.PriceSeries[0].close < EMA_Array[#EMA_Array-2] --предпредыдущий бар ниже средней
-	and strategy.PriceSeries[1].close > EMA_Array[#EMA_Array-1] --предыдущий бар выше средней
-	then
-		return true
-	else
-		return false
-	end
---]]	
-end
-
---для варианта с функцией getCandlesByIndex()
-function signal_sell_old(row)
-
---  Ma1 = Ma1Series[1].close						--предыдущая свеча
---  Ma1Pred = Ma1Series[0].close 	--ENS		--предпредыдущая свеча
-
-
-	--для тестов
-	
-	if window:GetValueByColName(row, 'test_sell').image == 'true' then
-		setVal(row, 'test_sell', 'false')
-		return true
-	end
-	
-	if strategy.Ma1 ~= 0 
-	and strategy.Ma1Pred  ~= 0 
-	and strategy.PriceSeries[0].close ~= 0
-	and strategy.PriceSeries[1].close ~= 0
---	and strategy.PriceSeries[0].close > EMA_Array[#EMA_Array-2] --предпредыдущий бар выше средней
---	and strategy.PriceSeries[1].close < EMA_Array[#EMA_Array-1] --предыдущий бар ниже средней
-	and strategy.PriceSeries[0].close > strategy.Ma1Pred --предпредыдущий бар выше средней
-	and strategy.PriceSeries[1].close < strategy.Ma1 --предыдущий бар ниже средней
-	then
-		return true
-	else
-		return false
-	end
-
-end
-
-
-
 function signal_buy(row)
 
 	--для тестов
-    
-	if window:GetValueByColName(row, 'test_buy').image == 'true' then
+	if getVal(row, 'test_buy').image == 'true' then
 		setVal(row, 'test_buy', 'false')
 		return true
 	end
 		
-	---[[
 	if tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) ~= 0 
-	and tonumber(TableEMA[row][TableEMAlastCandle[row]-2])  ~= 0 
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) ~= 0
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) ~= 0
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) < tonumber(TableEMA[row][TableEMAlastCandle[row]-2]) --предпредыдущий бар ниже средней
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) > tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) --предыдущий бар выше средней
+		and tonumber(TableEMA[row][TableEMAlastCandle[row]-2])  ~= 0 
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) ~= 0
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) ~= 0
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) < tonumber(TableEMA[row][TableEMAlastCandle[row]-2]) --предпредыдущий бар ниже средней
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) > tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) --предыдущий бар выше средней
 	then
 		return true
 	else
 		return false
 	end
-	--]]	
 		
 end
 
 function signal_sell(row)
 
-	--для тестов
-	
-	if window:GetValueByColName(row, 'test_sell').image == 'true' then
+	--для тестов	
+	if getVal(row, 'test_sell').image == 'true' then
 		setVal(row, 'test_sell', 'false')
 		return true
 	end
 	
 	if tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) ~= 0 
-	and tonumber(TableEMA[row][TableEMAlastCandle[row]-2])  ~= 0 
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) ~= 0
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) ~= 0
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) > tonumber(TableEMA[row][TableEMAlastCandle[row]-2]) --предпредыдущий бар выше средней
-	and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) < tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) --предыдущий бар ниже средней
+		and tonumber(TableEMA[row][TableEMAlastCandle[row]-2])  ~= 0 
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) ~= 0
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) ~= 0
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-2)) > tonumber(TableEMA[row][TableEMAlastCandle[row]-2]) --предпредыдущий бар выше средней
+		and tonumber(TableDS[row]:C(TableEMAlastCandle[row]-1)) < tonumber(TableEMA[row][TableEMAlastCandle[row]-1]) --предыдущий бар ниже средней
 	then
 		return true
 	else
