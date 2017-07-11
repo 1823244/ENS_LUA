@@ -157,34 +157,39 @@ function buySell(row, direction)
 
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена Last '..tostring(security.last))
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() minStepPrice '..tostring(security.minStepPrice))
+
+
 	
-	security:GetEdgePrices()--только для фьючей
-	
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() pricemax '..tostring(security.pricemax))--только для фьючей
-	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() pricemin '..tostring(security.pricemin))--только для фьючей
-	
-	
-	--проверка цены на превышение лимитов
 	local price = 0
-	
-    if dir == 'buy' then
+
+	if dir == 'buy' then
 		price = tonumber(security.last) + 150 * security.minStepPrice
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() price = last + 150 * minStepPrice =  '..tostring(price))
-		if security.pricemax~=0 and price > security.pricemax then
-			--только для фьючей
-			price = security.pricemax
-			logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена была скорректирована из-за выхода за границы диапазона. Новое значение '..tostring(price))
-		end
 	elseif dir == 'sell' then
 		price = tonumber(security.last) - 150 * security.minStepPrice
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() price = last - 150 * minStepPrice =  '..tostring(price))
-		if security.pricemin~=0 and price < security.pricemin then
-			--только для фьючей
-			price = security.pricemin
-			logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена была скорректирована из-за выхода за границы диапазона. Новое значение '..tostring(price))
-		end
-	end	
+	end		
+
+	--проверка цены на превышение лимитов (только для фьючей)
+	if ClassCode == 'SPBFUT' or ClassCode == 'SPBOPT' then
+
+		security:GetEdgePrices()
 	
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() pricemax '..tostring(security.pricemax))--только для фьючей
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() pricemin '..tostring(security.pricemin))--только для фьючей
+	
+		if dir == 'buy' then
+			if security.pricemax~=0 and price > security.pricemax then
+				price = security.pricemax
+				logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена была скорректирована из-за выхода за границы диапазона. Новое значение '..tostring(price))
+			end
+		elseif dir == 'sell' then
+			if security.pricemin~=0 and price < security.pricemin then
+				price = security.pricemin
+				logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена была скорректирована из-за выхода за границы диапазона. Новое значение '..tostring(price))
+			end
+		end		
+	end
 	
     if dir == 'buy' then
 		transactions:orderWithId(SecCodeBox, ClassCode, "B", ClientBox, DepoBox, tostring(price), qty, trans_id)
@@ -192,9 +197,7 @@ function buySell(row, direction)
 	elseif dir == 'sell' then
 		transactions:orderWithId(SecCodeBox, ClassCode, "S", ClientBox, DepoBox, tostring(price), qty, trans_id)
 		logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() отправлена транзакция ИД '..tostring(trans_id)..' с направлением SELL по цене '..tostring(price) .. ', цена инструмента была '..tostring(security.last) .. ', количество '..tostring(qty))
-	end
-	
-	
+	end	
 	
 	--очищаем, т.к. это временно значение
 	setVal(row, 'qty', tostring(0))

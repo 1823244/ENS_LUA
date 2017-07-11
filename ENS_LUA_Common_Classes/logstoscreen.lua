@@ -70,8 +70,6 @@ function LogsToScreen:createTableLogs()
 	
 	logs_window:SetCaption("logs_window")
 	
-	self.logs_window = logs_window
-	
 	logs_window:Show()
 	
 	---[[
@@ -88,23 +86,14 @@ function LogsToScreen:createTableLogs()
 	
 end
 
-function LogsToScreen:add(text)
-
-	local timetolog = os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2())
-	--message(text)
-	window:AddRow({timetolog, text},"")
-  --helper:AppendInFile(settings.logFile, os.date('%Y-%m-%d') .. ' ' .. tostring(helper:getHRTime2()) .. ' ' .. text ..'\n')
-  
-end
 
 function LogsToScreen:CloseTable()
 
-	--window:Close()
 	DestroyTable(self.logs_window.t_id)
 	
 end
 
---выводит информацию в расширенный лог
+--выводит информацию в расширенный лог и дублирует вывод в таблицу sqlite
 --window - класс с главной таблицей
 --row - число, номер строки в главной таблице
 function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
@@ -120,18 +109,6 @@ function LogsToScreen:add2(main_window, row, account, depo, sec, class, text)
 		depo 	= main_window:GetValueByColName(row, 'Depo').image
 	end
   
-  --[[
-	local rowNum = InsertRow(window.hID, -1)
-		
-	window:SetValueByColName(rowNum, 'Time_',timetolog)
-	window:SetValueByColName(rowNum, 'robot_id', settings.robot_id)
-	window:SetValueByColName(rowNum, 'Account', account)
-	window:SetValueByColName(rowNum, 'Depo', depo)
-	window:SetValueByColName(rowNum, 'Sec', sec)
-	window:SetValueByColName(rowNum, 'Class', class)
-	window:SetValueByColName(rowNum, 'Message_', text)
---]]
-
 	local newR = self.logs_window:AddLine()
 	
 	self.logs_window:SetValue(newR, "row", 			row)
