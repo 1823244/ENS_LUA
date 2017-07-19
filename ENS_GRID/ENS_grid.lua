@@ -24,7 +24,7 @@ local sqlite3 = require("lsqlite3")
 local math_ceil = math.ceil
 local math_floor = math.floor
 
-common classes
+--common classes
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\class.lua")
 dofile (getScriptPath() .. ".\\..\\ENS_LUA_Common_Classes\\Window.lua")
@@ -128,11 +128,11 @@ end
 function buySell(row, direction)
 
 	local SecCodeBox	= getVal(row, 'Ticker')
-	local ClassCode 	= getVal(row, 'Class').image
-	local ClientBox 	= getVal(row, 'Account').image
-	local DepoBox 		= getVal(row, 'Depo').image
+	local ClassCode 	= getVal(row, 'Class')
+	local ClientBox 	= getVal(row, 'Account')
+	local DepoBox 		= getVal(row, 'Depo')
 	--идентификатор транзакции нужен обязательно, чтобы потом можно было понять, на какую транзакцию пришел ответ
-	local trans_id 		= tonumber(getVal(row, 'trans_id').image)
+	local trans_id 		= tonumber(getVal(row, 'trans_id'))
 	
 	--если передано направление - используем его
 	local dir = ''
@@ -143,15 +143,13 @@ function buySell(row, direction)
 	end
 
 	--количество для заявки берем из "переменной" - поля qty в главной таблице в строке из параметра row
-	local qty 			= tonumber(getVal(row, 'qty').image)
+	local qty 			= tonumber(getVal(row, 'qty'))
 	
 	--получаем цену последней сделки, чтобы обладать актуальной информацией
 	security.class = ClassCode
 	security.code = SecCodeBox
 	security:Update()
 	
-	--local minStepPrice = tonumber(getVal(row, 'minStepPrice').image)
-
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() цена Last '..tostring(security.last))
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'BuySell() minStepPrice '..tostring(security.minStepPrice))
 
@@ -257,7 +255,7 @@ end
 --рефакторинг. запуск в работу одного инструмента
 function startStopRow(row)
 
-	if getVal(row, 'StartStop').image == 'start' then
+	if getVal(row, 'StartStop') == 'start' then
 		helperGrid:Red(window.hID, row, window:GetColNumberByName('StartStop'))
 
 		setVal(row, 'StartStop', 'stop')
@@ -532,14 +530,13 @@ function addRowsToMainWindow()
 end
 
 
+--+-----------------------------------------------
+--|			MAIN
+--+-----------------------------------------------
 
-
-  
-
-
---главная функция робота, которая гоняется в цикле
 function main()
-
+	--главная функция робота, которая гоняется в цикле
+	
 	if settings.invert_deals == true then
 		message('включено инвертирование сделок!!!',3)
 		logstoscreen:add2(window, nil, nil,nil,nil,nil,'включено инвертирование сделок!!!')
@@ -598,8 +595,8 @@ function main()
 		end
 		
 		--для самостоятельного расчета средней будем использовать datasource
-		local class_code =  getVal(row, 'Class').image
-		local sec_code =  getVal(row, 'Ticker').image
+		local class_code =  getVal(row, 'Class')
+		local sec_code =  getVal(row, 'Ticker')
 		
 		--datasource создаем в глобальной таблице
 		TableDS[row], ErrorDS[row] = CreateDataSource (class_code, sec_code, INTERVAL_M1) --индексы начинаются с единицы
@@ -608,7 +605,7 @@ function main()
 			logstoscreen:add2(window, row, nil,nil,nil,nil,'error when setting creating DataSource: '..ErrorDS[row])
 			--выключаем инструмент, по которому пришла ошибка
 
-			setVal(row, 'StartStop', 'stop')--turn off
+			setVal(row, 'StartStop', 'stop')--нужно поместить слово 'stop' в ячейку, а потом вызвать startStopRow(row), чтобы выключить строку
 			startStopRow(row)
 			logstoscreen:add2(window, row, nil,nil,nil,nil,  'instrument was turned off due to error creating datasource')
 			
@@ -634,20 +631,19 @@ function main()
 			end
 			logstoscreen:add2(window, row, nil,nil,nil,nil,'size of data source: '..tostring(TableDS[row]:Size()))
 		
+			--сразу посчитаем среднюю
+			
+			TableEMAlastCandle[row] = 0 --таблица, в которой лежат номера последних рассчитанных свечей индикатора EMA. хотя наверное можно отказаться, брать по размеру таблицы
+			
+			TableEMA[row]={} --таблица индикатор EMA. 
+			
+			TableEMA[row], TableEMAlastCandle[row] = EMAclass:emaDS(TableEMA[row], TableDS[row], 60, TableEMAlastCandle[row])
+			
+			--logstoscreen:add2(window, row, nil,nil,nil,nil,'last of EMA array: '..tostring(TableEMA[row][TableEMAlastCandle[row]]))
+
 		end
 		
-		--сразу посчитаем среднюю
-		
-		TableEMAlastCandle[row] = 0 --таблица, в которой лежат номера последних рассчитанных свечей индикатора EMA. хотя наверное можно отказаться, брать по размеру таблицы
-		
-		TableEMA[row]={} --таблица индикатор EMA. 
-		
-		TableEMA[row], TableEMAlastCandle[row] = EMAclass:emaDS(TableEMA[row], TableDS[row], 60, TableEMAlastCandle[row])
-		
-		--logstoscreen:add2(window, row, nil,nil,nil,nil,'last of EMA array: '..tostring(TableEMA[row][TableEMAlastCandle[row]]))
-		
 	end
-	
 	
 	--главный цикл
 	while is_run do
@@ -661,14 +657,12 @@ function main()
 
 end
 
-
-
 --+-----------------------------------------------
 --|			ОСНОВНОЙ АЛГОРИТМ
 --+-----------------------------------------------
 
---эта функция должна вызываться из обрамляющего цикла в функции main()
 function main_loop(row)
+	--*эта функция должна вызываться из обрамляющего цикла в функции main()
 
 	if isConnected() == 0 then
 		--window:InsertValue("Сигнал", "Not connected")
@@ -712,42 +706,42 @@ function main_loop(row)
 
 	--если строка выключена то можно проверить это здесь, а можно чуть дальше, чтобы сигналы все же показывались
 	--[[
-	if getVal(row, 'StartStop').image =='start'  then --инструмент выключен. когда включен, там будет Stop
+	if getVal(row, 'StartStop') =='start'  then --инструмент выключен. когда включен, там будет Stop
 		return
 	end		
 	--]]	
 	--+-----------------------------------------------------------------
 	--|			ОСНОВНОЙ АЛГОРИТМ
 	--+-----------------------------------------------------------------
-	local current_state = getVal(row, 'current_state').image
-	
+	local current_state = getVal(row, 'current_state')
+	local is_running = getVal(row, 'StartStop') =='stop' --строка запущена в работу
+
 	if current_state == 'waiting for a signal' then
 		--ожидаем новые сигналы 
 		wait_for_signal(row)
 		
 	elseif current_state == 'processing signal' then
 		--в этом состоянии робот шлет заявки на сервер, пока не наберет позицию или не кончится время или количество попыток
-		if getVal(row, 'StartStop').image =='stop'  then--строка запущена в работу
+		if is_running then
 			processSignal(row)
 		end		
 		
 	elseif current_state == 'waiting for a response' then
 		--заявку отправили, ждем пока придет ответ, перед отправкой новой
-		if getVal(row, 'StartStop').image =='stop'  then--строка запущена в работу
+		if is_running then
 			wait_for_response(row)
 		end
 	end
 
 end
 
---обработать сигнал: сравнить текущую позицию с плановой, добрать количество до планового, если текущее меньше.
 function processSignal(row)
-	
+	--функция набирает позицию
+
 	--нужно посмотреть, на сколько лотов/контрактов нужно открыть позицию - это в настройках каждой строки с инструментом
-	
 	local planQuantity = tonumber(getVal(row, 'Lot'))
 	
-	local signal_direction = getVal(row, 'sig_dir')
+	local signal_direction = getVal(row, 'sig_dir') -- 'buy'/'sell'
 	
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'processing signal: '..signal_direction)
 	
@@ -764,7 +758,7 @@ function processSignal(row)
 		
 	logstoscreen:add2(window, row, nil,nil,nil,nil,'fact quantity: ' .. tostring(factQuantity))
 	
-	local rejim = getVal(row, 'rejim')
+	local rejim = getVal(row, 'rejim')--'long'/'short'/'revers'
 
 	if rejim == 'revers' then
 		--все разрешено
@@ -795,32 +789,26 @@ function processSignal(row)
 
 		--сформируем ID заявки, чтобы потом можно быть ее отловить
 		local trans_id = helper:getMiliSeconds_trans_id()
-		
-		setVal(row, 'trans_id', tostring(trans_id))
-		
+		--закинем ID заявки в строку главной таблицы
+		setVal(row, 'trans_id', tostring(trans_id))		
 		--рассчитаем количество для добора позиции
-		local qty = planQuantity - factQuantity
-		
+		local qty = planQuantity - factQuantity		
 		if qty == 0 then
 			logstoscreen:add2(window, row, nil,nil,nil,nil,'ОШИБКА! qty = 0')
 			--если получилось нулевое количество - переходим к ожиданию нового сигнала
-			 
 			setVal(row, 'current_state', 'waiting for a signal')
 			setVal(row, 'sig_dir', ' ')
 			return
 		end
-		
 		if signal_direction == 'sell' then --приведем к положительному, т.к. в заявке не может быть отрицательного количества
 			qty = -1*qty
 		end
-		
-		logstoscreen:add2(window, row, nil,nil,nil,nil,'qty: ' .. tostring(qty))
-		
+		logstoscreen:add2(window, row, nil,nil,nil,nil,'количество в заявку: ' .. tostring(qty))
 		
 		--!!!!!!!!!!!!для отладки. хочу проверить как будет отрабатывать ожидание добора позиции 
+		--можно поставить любое число. например, если поставить 1, то позиция будет набираться одним лотом до планового количества
 		--qty = 5
-		
-		
+
 		setVal(row, 'qty', tostring(qty))
 		
 		--для визуального контроля пишем информацию о заявке во вспомогательную таблицу. там же идет запись в sqlite		
@@ -832,9 +820,9 @@ function processSignal(row)
 		--универсальная функция покупки/продажи. направление и количество она возьмет из строки "row"
 		buySell(row)
 		
-		--после отправки транзакции на биржу меняем состояние робота на то, в котором он ждет ответа на выставленную заявку - 'waiting for a signal'
-		--здесь может сложиться ситуация, когда buySell() будет исполняться долго, а в ответ ей придет,
-		--что заявка не может быть исполнена. в этом случае OnTransReply() поставит состояние 'stopped',
+		--После отправки транзакции на биржу меняем состояние робота на то, в котором он ждет ответа на выставленную заявку - 'waiting for a signal'
+		--Здесь может сложиться ситуация, когда buySell() будет исполняться долго, а в ответ ей придет,
+		--что заявка не может быть исполнена. В этом случае OnTransReply() поставит состояние 'stopped',
 		--а здесь мы должны проверить, установлено оно или нет, чтобы не поменять на 'waiting for a response',т.к. это ошибка.
 		if getVal(row, 'current_state') ~= 'stopped' then
 			setVal(row, 'current_state', 'waiting for a response')
@@ -844,21 +832,19 @@ function processSignal(row)
 		--позиция набрана
 		--logstoscreen:add2(window, row, nil,nil,nil,nil,'вся позиция уже набрана, заявка не отправлена!')
 		
+		--переключаем состояние робота на прием новых сигналов
 		setVal(row, 'current_state', 'waiting for a signal')
 		
 		--обновим состояние сигнала в таблице сигналов
-		local rows=0
-		local cols=0
-		rows,cols = signals:GetSize()
-		for j = rows, 1, -1 do --в таких таблицах нумерация начинается с единицы
+		for j = signals:GetSize(), 1, -1 do --в таких таблицах нумерация начинается с единицы
 			if tostring(signal_id) == tostring(signals:GetValue(j, "id").image) 
-				and row == tonumber(signals:GetValue(j, "row").image) then
-			
+						   and row == tonumber(signals:GetValue(j, "row").image) then
 				signals:SetValue(j, "done", true) 
 				break
 			end
 		end		
 		
+		--обнуляем "переменные"
 		setVal(row, 'trans_id', 0)
 		setVal(row, 'signal_id', 0)
 		
@@ -886,28 +872,28 @@ function processSignal(row)
 		--+------------------------------
 		
 		--[[
-		--сначала удаляем несработавший стоп лосс (если он, конечно, есть)
-		kill_stop_loss(row)
-		--потом ставим новый
-		if factQuantity<0 then
-			factQuantity=-1*factQuantity
-		end
-		send_stop_loss(row, factQuantity)
+			--сначала удаляем несработавший стоп лосс (если он, конечно, есть)
+			kill_stop_loss(row)
+			--потом ставим новый
+			if factQuantity<0 then
+				factQuantity=-1*factQuantity
+			end
+			send_stop_loss(row, factQuantity)
 		--]]
 	end
 	
 end
 
---функция ставит стоп-лосс
---параметры
---	factQuantity - вх - число - этого количества нет в главной таблице, поэтому приходится передавать его явно
 function send_stop_loss(row, factQuantity)
+	--функция ставит стоп-лосс
+	--параметры
+	--	factQuantity - вх - число - этого количества нет в главной таблице, поэтому приходится передавать его явно
 
-	local seccode 	= getVal(row, 'Ticker').image
-	local class 	= getVal(row, 'Class').image
-	local client 	= getVal(row, 'Account').image
-	local depo 		= getVal(row, 'Depo').image
-	local sig_dir 	= getVal(row, 'sig_dir').image
+	local seccode 	= getVal(row, 'Ticker')
+	local class 	= getVal(row, 'Class')
+	local client 	= getVal(row, 'Account')
+	local depo 		= getVal(row, 'Depo')
+	local sig_dir 	= getVal(row, 'sig_dir')
 	
 	local operation = 'B'
 	if sig_dir == 'buy' then
@@ -948,8 +934,8 @@ function send_stop_loss(row, factQuantity)
 	
 end
 
---функция убирает стоп-лосс
 function kill_stop_loss(row)
+	--функция убирает стоп-лосс
 
 	--получаем id стоп_лосса из главной таблицы
 	local stop_id = getVal(row, 'stop_order_id')
@@ -985,8 +971,9 @@ function kill_stop_loss(row)
 	
 end
 
---ждать ответа на отправленную заявку
 function wait_for_response(row)
+	--ждать ответа на отправленную заявку
+
 	--logstoscreen:add2(window, row, nil,nil,nil,nil,'we are waiting the result of sending order')
 
 	---[[
@@ -1055,24 +1042,23 @@ function wait_for_response(row)
 		
 end
 
---функция проверяет, на сколько изменилась цена
 function test_profit(row)
+	--функция проверяет, на сколько изменилась цена
 
-
-	local SecCodeBox	=getVal(row, 'Ticker').image
-	local ClassCode 	=getVal(row, 'Class').image
-	local dir			=getVal(row, 'sig_dir').image
-	local ClientBox 	=getVal(row, 'Account').image
-	local DepoBox 		=getVal(row, 'Depo').image
+	local SecCodeBox	=getVal(row, 'Ticker')
+	local ClassCode 	=getVal(row, 'Class')
+	local dir			=getVal(row, 'sig_dir')
+	local ClientBox 	=getVal(row, 'Account')
+	local DepoBox 		=getVal(row, 'Depo')
 	
 	security.class = ClassCode
 	security.code = SecCodeBox
 	
 	
 	
-	if getVal(row, 'start_price').image~=nil and getVal(row, 'start_price').image~='' then
+	if getVal(row, 'start_price')~=nil and getVal(row, 'start_price')~='' then
 	
-		local start_price = tonumber(getVal(row, 'start_price').image)
+		local start_price = tonumber(getVal(row, 'start_price'))
 		
 		security:Update()
 		
@@ -1111,8 +1097,8 @@ function test_profit(row)
 	end
 end
 
---ждать новые сигналы и следить за ценой.
 function wait_for_signal(row)
+	--ждать новые сигналы и следить за ценой.
 
 	--сначала посчитаем прибыль.
 	--если она есть, то частично закрываем позицию
@@ -1124,7 +1110,7 @@ function wait_for_signal(row)
 	--нужно только так, сначала поместить сигналы в переменные, потом работать с переменными
 	--это надо, чтобы работал тест сигналов - когда включается тестовый флаг, функция сигнала возвращает истину, а перед этим выключает флаг
 	--т.е. более одного раза вызвать функцию сигнала в режиме теста не получится
-	local signal_buy =  signal_buy(row)
+	local signal_buy  =  signal_buy(row)
 	local signal_sell =  signal_sell(row)
 	
 	if signal_buy == false and signal_sell == false then
@@ -1136,7 +1122,9 @@ function wait_for_signal(row)
 		еще целый час после обработки
 		local dt=strategy.PriceSeries[1].datetime--предыдущая свеча
 	--]]
+	--возьмем свечу из DataSource
 	local dt = TableDS[row]:T(TableEMAlastCandle[row]-1)
+	--и на основе этой свечи сформируем дату и время
 	local candle_date = dt.year..'-'..dt.month..'-'..dt.day
 	local candle_time = dt.hour..':'..dt.min..':'..dt.sec
 
@@ -1178,19 +1166,20 @@ function wait_for_signal(row)
 	helperGrid:addRowToSignals(row, trans_id, signal_id, sig_dir, window, candle_date, candle_time, TableDS[row]:C(TableEMAlastCandle[row]-1), TableEMA[row][TableEMAlastCandle[row]-1], false) 
 	
 	--переходим в режим обработки сигнала. функция обработки сработает на следующей итерации
-	if getVal(row, 'StartStop').image =='stop'  then--строка запущена в работу
+	if getVal(row, 'StartStop') =='stop'  then--строка запущена в работу
 		setVal(row, 'current_state', 'processing signal')
 	end
 	
 end
 
---[[ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
+function find_signal(row, candle_date, candle_time)
+	--[[ищет сигнал в таблице сигналов. вызывается при поступлении нового сигнала.
 	сигнал будет поступать все следующее время после формирования, согласно выбранному таймфрейму графика цены
 	т.е. когда он поступил в момент формирования новой свечи, он еще будет поступать всю эту свечу.
 	Есть один баг. Если робота перезапустить во время жизни свечи, на которой возник сигнал, то он опять увидит этот сигнал
 	и попробует вставить в позицию. Если позиция уже была сформирована до перезапуска, то ничего страшного, 
 	сработает проверка plan-fact и не позволит увеличить позу.--]]
-function find_signal(row, candle_date, candle_time)
+
 	local rows=0
 	local cols=0
 	rows,cols = signals:GetSize()
@@ -1207,15 +1196,10 @@ function find_signal(row, candle_date, candle_time)
 	return false
 end
 
-
---+-----------------------------------------------
---|			ОСНОВНОЙ АЛГОРИТМ - КОНЕЦ
---+-----------------------------------------------
-
 function signal_buy(row)
 
 	--для тестов
-	if getVal(row, 'test_buy').image == 'true' then
+	if getVal(row, 'test_buy') == 'true' then
 		setVal(row, 'test_buy', 'false')
 		return true
 	end
@@ -1237,7 +1221,7 @@ end
 function signal_sell(row)
 
 	--для тестов	
-	if getVal(row, 'test_sell').image == 'true' then
+	if getVal(row, 'test_sell') == 'true' then
 		setVal(row, 'test_sell', 'false')
 		return true
 	end
@@ -1256,11 +1240,16 @@ function signal_sell(row)
 
 end
 
+--+-----------------------------------------------
+--|			SERVICE
+--+-----------------------------------------------
+
 --обертка для получения значения из текущей строки главной таблицы
 function getVal(row, colName)
 	return window:GetValueByColName(row, colName).image
 end
 
+--обертка для установки значения в текущую строку главной таблицы
 function setVal(row, colName, val)
 	window:SetValueByColName(row, colName, val)
 end
