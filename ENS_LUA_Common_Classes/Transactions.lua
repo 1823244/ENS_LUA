@@ -260,5 +260,5 @@ function Transactions:killOrder(number, code, class)
     TRANS_ID = tostring(1)
   }
   local res = sendTransaction(kill_order_trans)
-  message(res, 1)
+  --message(res, 1)
 end
